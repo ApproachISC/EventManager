@@ -287,11 +287,12 @@
               </div>
               <div class="card-body">
                 <p class="text-sm text-muted" style="margin-bottom:var(--space-4)">
-                  Upload a CSV file with columns <code>email</code> and <code>name</code>.
+                  Upload a CSV file with columns <code>email</code>, <code>name</code>, and optionally <code>code</code>.
+                  The <code>code</code> value (e.g. a student ID) will be used as their QR token — if omitted, one is generated automatically.
                   Existing users will be re-enrolled; new users will receive an invite email with their QR code.
                 </p>
 
-                <a href="data:text/csv;charset=utf-8,email%2Cname%0Ajohn%40example.com%2CJohn%20Smith%0Ajane%40example.com%2CJane%20Doe"
+                <a href="data:text/csv;charset=utf-8,email%2Cname%2Ccode%0Ajohn%40example.com%2CJohn%20Smith%2CS001%0Ajane%40example.com%2CJane%20Doe%2CS002"
                    download="attendees-template.csv"
                    class="btn btn-outline btn-sm"
                    style="margin-bottom:var(--space-4)">

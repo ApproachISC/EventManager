@@ -394,6 +394,7 @@ async function handleCSVImport(file) {
   for (const row of rows) {
     const email = (row.email ?? row.Email ?? "").trim().toLowerCase();
     const name  = (row.name  ?? row.Name  ?? "").trim();
+    const code  = (row.code  ?? row.Code  ?? "").trim().toLowerCase() || null;
     if (!email || !name) { failed++; done++; continue; }
 
     try {
@@ -434,7 +435,7 @@ async function handleCSVImport(file) {
 
         // Assign to event now so qr_token exists before the email is sent
         await _supabase.from("event_attendees").upsert(
-          { event_id: _eventId, user_id: userId },
+          { event_id: _eventId, user_id: userId, ...(code ? { qr_token: code } : {}) },
           { onConflict: "event_id,user_id" }
         );
 
@@ -460,7 +461,7 @@ async function handleCSVImport(file) {
 
       // Assign to event (idempotent — unique constraint handles dups)
       await _supabase.from("event_attendees").upsert(
-        { event_id: _eventId, user_id: userId },
+        { event_id: _eventId, user_id: userId, ...(code ? { qr_token: code } : {}) },
         { onConflict: "event_id,user_id" }
       );
 
