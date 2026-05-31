@@ -267,7 +267,7 @@ function renderSessionInfo() {
         <div style="font-weight:600;color:var(--nd-gold)" id="period-countdown">${mm}:${ss}</div>
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-3)">
-        <button class="btn btn-ghost btn-sm" onclick="changePeriod()" title="Switch period" aria-label="Switch period">
+        <button class="btn btn-primary btn-sm" onclick="changePeriod()" title="Switch period" aria-label="Switch period">
           <i class="ti ti-refresh"></i> Switch
         </button>
         <div class="scan-status active" id="scan-status-indicator">

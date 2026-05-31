@@ -728,16 +728,18 @@ async function toggleAttendanceOverride(logId, newPresent) {
 function exportReportCSV() {
   if (!_report.length) { showToast("No report data to export.", "info"); return; }
 
-  const headers  = ["Name", "Email", ..._periods.map(p => `${p.name} (${p.period_date})`)];
+  const headers  = ["Name", "Email", "Code", ..._periods.map(p => `${p.name} (${p.period_date})`)];
+  const codeById = Object.fromEntries(_attendees.map(a => [a.user_id, a.qr_token]));
   const byId     = {};
   for (const row of _report) {
     if (!byId[row.attendee_id]) byId[row.attendee_id] = { name: row.attendee_name, email: row.attendee_email, periods: {} };
     byId[row.attendee_id].periods[row.period_id] = row.present;
   }
 
-  const rows = Object.values(byId).map(att => [
+  const rows = Object.entries(byId).map(([id, att]) => [
     att.name,
     att.email,
+    codeById[id] ?? "",
     ..._periods.map(p => {
       const v = att.periods[p.id];
       return v === true ? "Present" : v === false ? "Absent" : "—";
