@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Take Attendance — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Full-height scanner layout on mobile */
+    @media (max-width: 768px) {
+      .taker-grid { grid-template-columns: 1fr !important; }
+      .scanner-wrap { aspect-ratio: 1/1; }
+    }
+
+    .taker-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: var(--space-5);
+      align-items: start;
+    }
+
+    /* Session info banner */
+    #session-info-bar {
+      background: var(--medium-blue);
+      border-bottom: 2px solid var(--nd-gold);
+      padding: var(--space-3) var(--space-8);
+    }
+
+    /* Scan log scroll area */
+    #scan-log-list {
+      max-height: 480px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-3);
+    }
+
+    /* Result banner */
+    #result-banner {
+      display: none;
+      margin-bottom: var(--space-4);
+      animation: slideDown 0.22s ease;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon" aria-hidden="true">
+        <i class="ti ti-calendar-event"></i>
+      </div>
+      <div>
+        <div class="sidebar-logo-text">Event Manager</div>
+        <div class="sidebar-logo-sub">Taker Portal</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-section-label">Session</div>
+      </div>
+      <a href="taker.html" class="sidebar-nav-item active" aria-current="page">
+        <i class="ti ti-qrcode"></i>
+        Take Attendance
+      </a>
+
+      <div class="sidebar-nav-section" style="margin-top:var(--space-4)">
+        <div class="sidebar-nav-section-label">Account</div>
+      </div>
+      <button class="sidebar-nav-item w-full" id="signout-btn" style="text-align:left">
+        <i class="ti ti-logout"></i>
+        Sign Out
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar" aria-hidden="true">?</div>
+        <div>
+          <div class="sidebar-user-name" id="sidebar-user-name">Loading…</div>
+          <div class="sidebar-user-role" id="sidebar-user-role">taker</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ────────────────────────────────────── -->
+  <div class="app-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" id="menu-toggle" aria-label="Toggle navigation" style="display:none"
+        onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <div>
+        <div class="topbar-title">Take Attendance</div>
+        <div class="topbar-subtitle" id="topbar-subtitle">Loading session…</div>
+      </div>
+      <div class="topbar-actions">
+        <span class="text-xs text-faint" id="scan-counter"></span>
+      </div>
+    </header>
+
+    <!-- Session info bar -->
+    <div id="session-info-bar">
+      <div id="session-info" style="color:var(--dark-sky-blue);font-size:0.8rem">
+        Loading session information…
+      </div>
+    </div>
+
+    <!-- Page content -->
+    <main class="page-content">
+
+      <!-- ── No session state ─────────────────────────── -->
+      <div id="no-session-ui" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center">
+        <div style="width:72px;height:72px;background:var(--medium-sky-blue);border-radius:var(--radius-xl);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--medium-blue);margin-bottom:var(--space-5)">
+          <i class="ti ti-calendar-off"></i>
+        </div>
+        <h2 style="margin-bottom:var(--space-2)">No Active Session</h2>
+        <p class="text-muted" id="no-session-msg" style="max-width:380px;font-size:0.9rem;line-height:1.7">
+          You don't have an active session assignment right now.
+        </p>
+        <p class="text-faint text-sm" style="margin-top:var(--space-4)">
+          Contact your event manager if you believe this is an error.
+        </p>
+      </div>
+
+      <!-- ── Period picker ────────────────────────────── -->
+      <div id="period-picker-ui" style="display:none;max-width:480px;margin:0 auto">
+        <div class="card">
+          <div class="card-header">
+            <i class="ti ti-calendar-event"></i>
+            <span class="card-header-title">Select Period</span>
+          </div>
+          <div class="card-body">
+            <p class="text-sm text-muted" style="margin-bottom:var(--space-4)">
+              Choose the period you are taking attendance for right now.
+            </p>
+            <div id="period-list" style="display:flex;flex-direction:column;gap:var(--space-2)">
+              <!-- Populated by taker.js -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Scanner UI ───────────────────────────────── -->
+      <div id="scanner-ui" style="display:none">
+
+        <!-- Result banner (shown after each scan) -->
+        <div id="result-banner" class="alert" role="alert" aria-live="assertive"></div>
+
+        <div class="taker-grid">
+
+          <!-- LEFT: Camera + manual entry -->
+          <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+
+            <!-- Camera card -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-camera"></i>
+                <span class="card-header-title">QR Scanner</span>
+                <div class="card-header-actions">
+                  <button class="btn btn-success btn-sm" id="start-cam-btn">
+                    <i class="ti ti-video"></i> Start Camera
+                  </button>
+                  <button class="btn btn-danger btn-sm" id="stop-cam-btn" style="display:none">
+                    <i class="ti ti-video-off"></i> Stop
+                  </button>
+                </div>
+              </div>
+              <div class="card-body card-body-sm">
+
+                <!-- Viewfinder -->
+                <div class="scanner-wrap" id="scanner-wrap">
+                  <video class="scanner-video" id="scanner-video" autoplay muted playsinline></video>
+
+                  <!-- Corner markers -->
+                  <div class="vf-corner vf-tl" aria-hidden="true"></div>
+                  <div class="vf-corner vf-tr" aria-hidden="true"></div>
+                  <div class="vf-corner vf-bl" aria-hidden="true"></div>
+                  <div class="vf-corner vf-br" aria-hidden="true"></div>
+
+                  <!-- Scan line -->
+                  <div class="scan-line" id="scan-line" aria-hidden="true"></div>
+
+                  <!-- Flash -->
+                  <div class="scanner-flash" id="scanner-flash" aria-hidden="true"></div>
+
+                  <!-- Overlay (shown when camera is off) -->
+                  <div class="scanner-overlay" id="scanner-overlay" aria-label="Camera viewfinder, camera not started">
+                    <i class="ti ti-camera-off" aria-hidden="true"></i>
+                    <span>Tap "Start Camera" to begin scanning</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Manual entry card -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-keyboard"></i>
+                <span class="card-header-title">Manual Code Entry</span>
+              </div>
+              <div class="card-body">
+                <p class="text-sm text-muted" style="margin-bottom:var(--space-3)">
+                  Use if the QR code can't be scanned. Enter the attendee's token code.
+                </p>
+                <form id="manual-form" novalidate>
+                  <div class="manual-input-wrap">
+                    <input
+                      type="text"
+                      id="manual-code-input"
+                      class="form-control"
+                      placeholder="Enter QR token code…"
+                      autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      aria-label="Manual attendance code"
+                      style="font-family:monospace;letter-spacing:0.05em"
+                    />
+                    <button type="submit" class="btn btn-primary" aria-label="Submit code">
+                      <i class="ti ti-check"></i> Submit
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+          </div>
+          <!-- /LEFT -->
+
+          <!-- RIGHT: Scan log -->
+          <div class="card" style="position:sticky;top:calc(var(--topbar-height) + 80px)">
+            <div class="card-header">
+              <i class="ti ti-list-check"></i>
+              <span class="card-header-title">Recent Scans</span>
+              <div class="card-header-actions">
+                <span class="badge badge-neutral" id="log-count-badge">0</span>
+              </div>
+            </div>
+
+            <div id="scan-log-list" aria-label="Recent scan results" aria-live="polite">
+              <div style="padding:var(--space-6);text-align:center;color:var(--dark-sky-blue);font-size:0.8rem">
+                No scans yet. Start the camera or enter a code manually.
+              </div>
+            </div>
+
+            <div class="card-footer" style="justify-content:center">
+              <button class="btn btn-ghost btn-sm" onclick="clearLog()">
+                <i class="ti ti-trash"></i> Clear log
+              </button>
+            </div>
+          </div>
+          <!-- /RIGHT -->
+
+        </div>
+        <!-- /taker-grid -->
+
+      </div>
+      <!-- /scanner-ui -->
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/taker.js"></script>
+
+<script>
+  if (window.innerWidth <= 768) {
+    document.getElementById("menu-toggle").style.display = "flex";
+  }
+
+  // Clear log helper (global so inline onclick works)
+  function clearLog() {
+    if (typeof _scanLog !== "undefined") _scanLog.length = 0;
+    const list = document.getElementById("scan-log-list");
+    if (list) list.innerHTML = `<div style="padding:var(--space-6);text-align:center;color:var(--dark-sky-blue);font-size:0.8rem">
+      Log cleared.
+    </div>`;
+    const counter = document.getElementById("scan-counter");
+    const badge   = document.getElementById("log-count-badge");
+    if (counter) counter.textContent = "";
+    if (badge)   badge.textContent   = "0";
+  }
+
+  // Keep log count badge in sync
+  const _origAddToLog = typeof addToLog !== "undefined" ? addToLog : null;
+  document.addEventListener("scan-logged", () => {
+    const badge = document.getElementById("log-count-badge");
+    if (badge && typeof _scanLog !== "undefined") badge.textContent = _scanLog.length;
+  });
+</script>
+
+</body>
+</html>

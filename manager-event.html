@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Progress bar for CSV import */
+    #import-progress {
+      display: none;
+      margin-top: var(--space-3);
+    }
+    #import-progress-track {
+      height: 6px;
+      background: var(--medium-sky-blue);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    #import-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--success-green);
+      border-radius: var(--radius-full);
+      transition: width 0.2s;
+    }
+
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon" aria-hidden="true">
+        <i class="ti ti-calendar-event"></i>
+      </div>
+      <div>
+        <div class="sidebar-logo-text">Event Manager</div>
+        <div class="sidebar-logo-sub">Manager Portal</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-section-label">Navigation</div>
+      </div>
+      <a href="manager.html" class="sidebar-nav-item">
+        <i class="ti ti-layout-dashboard"></i>
+        Dashboard
+      </a>
+      <a href="#" class="sidebar-nav-item active" aria-current="page">
+        <i class="ti ti-calendar-event"></i>
+        <span id="sidebar-event-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">This Event</span>
+      </a>
+
+      <div class="sidebar-nav-section" style="margin-top:var(--space-4)">
+        <div class="sidebar-nav-section-label">Account</div>
+      </div>
+      <button class="sidebar-nav-item w-full" id="signout-btn" style="text-align:left">
+        <i class="ti ti-logout"></i>
+        Sign Out
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar" aria-hidden="true">?</div>
+        <div>
+          <div class="sidebar-user-name" id="sidebar-user-name">Loading…</div>
+          <div class="sidebar-user-role" id="sidebar-user-role">manager</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ────────────────────────────────────── -->
+  <div class="app-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" id="menu-toggle" aria-label="Toggle navigation" style="display:none"
+        onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <div>
+        <div class="topbar-title" id="event-name">Loading…</div>
+        <div class="topbar-subtitle" id="event-dates"></div>
+      </div>
+      <div class="topbar-actions">
+        <span class="badge badge-draft" id="event-status-badge">Draft</span>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content">
+
+      <!-- Breadcrumb -->
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="manager.html"><i class="ti ti-layout-dashboard"></i> Dashboard</a>
+        <i class="ti ti-chevron-right"></i>
+        <span id="breadcrumb-name">Event</span>
+      </nav>
+
+      <!-- ── Event info + status ───────────────────────── -->
+      <div class="card" style="margin-bottom:var(--space-6)">
+        <div class="card-header">
+          <i class="ti ti-info-circle"></i>
+          <span class="card-header-title">Event Status</span>
+          <div class="card-header-actions">
+            <button class="btn btn-success btn-sm" id="btn-to-active" style="display:none">
+              <i class="ti ti-player-play"></i> Open for Attendance
+            </button>
+            <button class="btn btn-outline btn-sm" id="btn-to-closed" style="display:none">
+              <i class="ti ti-archive"></i> Close Event
+            </button>
+            <button class="btn btn-ghost btn-sm" id="btn-to-draft" style="display:none">
+              <i class="ti ti-pencil"></i> Reopen as Draft
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p id="event-desc" class="text-muted text-sm" style="margin-bottom:var(--space-4)"></p>
+
+          <!-- Status stepper -->
+          <div class="status-stepper" role="list" aria-label="Event status progression">
+            <div class="status-step" id="step-draft" role="listitem">
+              <i class="ti ti-pencil"></i> Draft
+            </div>
+            <div class="status-step" id="step-active" role="listitem">
+              <i class="ti ti-circle-check"></i> Active
+            </div>
+            <div class="status-step" id="step-closed" role="listitem">
+              <i class="ti ti-archive"></i> Closed
+            </div>
+          </div>
+
+          <p class="text-xs text-faint" style="margin-top:var(--space-3)">
+            <i class="ti ti-info-circle"></i>
+            <strong>Draft</strong> — setup only.
+            <strong>Active</strong> — takers can record attendance.
+            <strong>Closed</strong> — read-only.
+          </p>
+        </div>
+      </div>
+
+      <!-- ── Tabs ──────────────────────────────────────── -->
+      <div data-tabs>
+        <div class="tabs" role="tablist" aria-label="Event management tabs">
+          <button class="tab-btn" data-tab="tab-periods" role="tab" aria-controls="tab-periods">
+            <i class="ti ti-clock"></i> Periods
+          </button>
+          <button class="tab-btn" data-tab="tab-takers" role="tab" aria-controls="tab-takers">
+            <i class="ti ti-user-scan"></i> Takers
+          </button>
+          <button class="tab-btn" data-tab="tab-attendees" role="tab" aria-controls="tab-attendees">
+            <i class="ti ti-users"></i> Attendees
+          </button>
+          <button class="tab-btn" data-tab="tab-report" role="tab" aria-controls="tab-report"
+            onclick="onReportTabActivated()">
+            <i class="ti ti-chart-bar"></i> Report
+          </button>
+        </div>
+
+        <!-- ══ PERIODS TAB ══════════════════════════════ -->
+        <div class="tab-panel" id="tab-periods" role="tabpanel">
+          <div class="grid-2" style="align-items:start;gap:var(--space-5)">
+
+            <!-- Periods list -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-list"></i>
+                <span class="card-header-title">Periods</span>
+              </div>
+              <div class="table-wrap" style="border:none">
+                <table aria-label="Periods list">
+                  <thead>
+                    <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="periods-tbody">
+                    <tr><td colspan="3"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Add period form -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-plus"></i>
+                <span class="card-header-title">Add Period</span>
+              </div>
+              <div class="card-body">
+                <form id="add-period-form" novalidate>
+                  <div class="form-group">
+                    <label class="form-label" for="period-name">Period name <span class="required">*</span></label>
+                    <input type="text" id="period-name" class="form-control"
+                      placeholder="e.g. Day 1 Morning" maxlength="80" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="period-date">Date <span class="required">*</span></label>
+                    <input type="date" id="period-date" class="form-control" required />
+                  </div>
+                  <button type="submit" id="add-period-btn" class="btn btn-primary w-full">
+                    <i class="ti ti-plus"></i> Add Period
+                  </button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ══ TAKERS TAB ═══════════════════════════════ -->
+        <div class="tab-panel" id="tab-takers" role="tabpanel">
+          <div class="grid-2" style="align-items:start;gap:var(--space-5)">
+
+            <!-- Takers list -->
+            <div class="card" style="grid-column:1/-1">
+              <div class="card-header">
+                <i class="ti ti-user-scan"></i>
+                <span class="card-header-title">Attendance Takers</span>
+              </div>
+              <div class="table-wrap" style="border:none">
+                <table aria-label="Attendance takers list">
+                  <thead>
+                    <tr>
+                      <th scope="col">Taker</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Invited</th>
+                      <th scope="col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="takers-tbody">
+                    <tr><td colspan="4"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Invite taker form -->
+            <div class="card" style="grid-column:1/-1">
+              <div class="card-header">
+                <i class="ti ti-send"></i>
+                <span class="card-header-title">Invite Taker</span>
+              </div>
+              <div class="card-body">
+                <form id="invite-taker-form" novalidate>
+                  <div class="form-group">
+                    <label class="form-label" for="taker-email">Email address <span class="required">*</span></label>
+                    <div class="input-group">
+                      <i class="ti ti-mail input-icon"></i>
+                      <input type="email" id="taker-email" class="form-control"
+                        placeholder="taker@example.com" required />
+                    </div>
+                  </div>
+                  <div class="alert alert-info">
+                    <i class="ti ti-info-circle"></i>
+                    <span>The taker will receive a temporary password by email. When they sign in, they will select which period to take attendance for.</span>
+                  </div>
+                  <button type="submit" id="invite-taker-btn" class="btn btn-primary" style="margin-top:var(--space-4)">
+                    <i class="ti ti-send"></i> Send Invitation
+                  </button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ══ ATTENDEES TAB ════════════════════════════ -->
+        <div class="tab-panel" id="tab-attendees" role="tabpanel">
+
+          <!-- Import + download row -->
+          <div class="grid-2" style="margin-bottom:var(--space-5);align-items:start;gap:var(--space-5)">
+
+            <!-- CSV import card -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-file-spreadsheet"></i>
+                <span class="card-header-title">Import Attendees (CSV)</span>
+              </div>
+              <div class="card-body">
+                <p class="text-sm text-muted" style="margin-bottom:var(--space-4)">
+                  Upload a CSV file with columns <code>email</code> and <code>name</code>.
+                  Existing users will be re-enrolled; new users will receive an invite email with their QR code.
+                </p>
+
+                <a href="data:text/csv;charset=utf-8,email%2Cname%0Ajohn%40example.com%2CJohn%20Smith%0Ajane%40example.com%2CJane%20Doe"
+                   download="attendees-template.csv"
+                   class="btn btn-outline btn-sm"
+                   style="margin-bottom:var(--space-4)">
+                  <i class="ti ti-download"></i> Download template
+                </a>
+
+                <div>
+                  <button class="btn btn-primary btn-upload w-full" id="import-btn" aria-label="Upload CSV">
+                    <i class="ti ti-upload"></i> Upload CSV
+                    <input type="file" id="csv-file-input" accept=".csv,text/csv" />
+                  </button>
+                </div>
+
+                <!-- Progress bar -->
+                <div id="import-progress">
+                  <p class="text-xs text-muted" style="margin-bottom:4px">Importing attendees…</p>
+                  <div id="import-progress-track">
+                    <div id="import-bar"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- QR sheet card -->
+            <div class="card">
+              <div class="card-header">
+                <i class="ti ti-qrcode"></i>
+                <span class="card-header-title">QR Code Sheet</span>
+              </div>
+              <div class="card-body">
+                <p class="text-sm text-muted" style="margin-bottom:var(--space-4)">
+                  Generate a printable sheet of QR codes for all attendees — one per cell, 3 columns, ready to cut and hand out.
+                </p>
+                <button class="btn btn-gold w-full" id="download-qr-btn">
+                  <i class="ti ti-printer"></i> Print QR Code Sheet
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Attendees table -->
+          <div class="card">
+            <div class="card-header">
+              <i class="ti ti-users"></i>
+              <span class="card-header-title">Enrolled Attendees</span>
+              <span class="badge badge-neutral" style="margin-left:var(--space-2)" id="attendees-count">0 attendees</span>
+            </div>
+            <div class="table-wrap" style="border:none">
+              <table aria-label="Attendees list">
+                <thead>
+                  <tr>
+                    <th scope="col">Attendee</th>
+                    <th scope="col">QR Token</th>
+                    <th scope="col">Enrolled</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="attendees-tbody">
+                  <tr><td colspan="4"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ══ REPORT TAB ═══════════════════════════════ -->
+        <div class="tab-panel" id="tab-report" role="tabpanel">
+
+          <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:var(--space-3)">
+            <div>
+              <h3 style="margin-bottom:2px">Attendance Report</h3>
+              <p class="text-sm text-muted">Click any cell to toggle presence. Overrides are tracked.</p>
+            </div>
+            <button class="btn btn-outline" id="export-csv-btn">
+              <i class="ti ti-table-export"></i> Export CSV
+            </button>
+          </div>
+
+          <!-- Report renders here -->
+          <div id="report-container">
+            <div class="table-empty">
+              <i class="ti ti-chart-bar-off"></i>
+              <p>Click the Report tab to load attendance data.</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+      <!-- /data-tabs -->
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/manager-event.js"></script>
+
+<script>
+  if (window.innerWidth <= 768) {
+    document.getElementById("menu-toggle").style.display = "flex";
+  }
+
+  // Sync sidebar event name + breadcrumb once event loads
+  const observer = new MutationObserver(() => {
+    const name = document.getElementById("event-name")?.textContent;
+    if (name && name !== "Loading…") {
+      const sidebarEl   = document.getElementById("sidebar-event-name");
+      const breadcrumEl = document.getElementById("breadcrumb-name");
+      if (sidebarEl)   sidebarEl.textContent   = name;
+      if (breadcrumEl) breadcrumEl.textContent  = name;
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.getElementById("event-name"), { childList: true });
+</script>
+
+</body>
+</html>

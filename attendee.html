@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My QR Code — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon" aria-hidden="true">
+        <i class="ti ti-calendar-event"></i>
+      </div>
+      <div>
+        <div class="sidebar-logo-text">Event Manager</div>
+        <div class="sidebar-logo-sub">Attendee Portal</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-section-label">My Events</div>
+      </div>
+      <a href="attendee.html" class="sidebar-nav-item active" aria-current="page">
+        <i class="ti ti-qrcode"></i>
+        My QR Code
+      </a>
+
+      <div class="sidebar-nav-section" style="margin-top:var(--space-4)">
+        <div class="sidebar-nav-section-label">Account</div>
+      </div>
+      <button class="sidebar-nav-item w-full" id="signout-btn" style="text-align:left">
+        <i class="ti ti-logout"></i>
+        Sign Out
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar" aria-hidden="true">?</div>
+        <div>
+          <div class="sidebar-user-name" id="sidebar-user-name">Loading…</div>
+          <div class="sidebar-user-role" id="sidebar-user-role">attendee</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ────────────────────────────────────── -->
+  <div class="app-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" id="menu-toggle" aria-label="Toggle navigation" style="display:none"
+        onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <div>
+        <div class="topbar-title">My QR Code</div>
+        <div class="topbar-subtitle" id="topbar-subtitle">Loading…</div>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content">
+
+      <!-- Loading state -->
+      <div id="loading-ui" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:420px">
+        <div class="spinner spinner-lg" aria-label="Loading your events"></div>
+        <p class="text-muted" style="margin-top:var(--space-5)">Loading your events…</p>
+      </div>
+
+      <!-- No events state -->
+      <div id="no-events-ui" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:420px;text-align:center">
+        <div style="width:72px;height:72px;background:var(--medium-sky-blue);border-radius:var(--radius-xl);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--medium-blue);margin-bottom:var(--space-5)">
+          <i class="ti ti-calendar-off"></i>
+        </div>
+        <h2 style="margin-bottom:var(--space-2)">No Events Found</h2>
+        <p class="text-muted" style="max-width:380px;font-size:0.9rem;line-height:1.7">
+          You haven't been enrolled in any events yet.
+        </p>
+        <p class="text-faint text-sm" style="margin-top:var(--space-4)">
+          Contact your event manager if you believe this is an error.
+        </p>
+      </div>
+
+      <!-- Attendee UI -->
+      <div id="attendee-ui" style="display:none">
+        <div class="attendee-grid">
+
+          <!-- QR Code card (spans full width on desktop when only one card) -->
+          <div class="card" style="grid-column:1 / -1">
+            <div class="card-header">
+              <i class="ti ti-qrcode"></i>
+              <span class="card-header-title">Your Attendance QR Code</span>
+              <div class="card-header-actions" id="event-selector-wrap" style="display:none">
+                <label class="sr-only" for="event-select">Select event</label>
+                <select class="form-control" id="event-select" style="min-width:180px;font-size:0.82rem"></select>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="qr-center">
+                <canvas id="qr-canvas" width="256" height="256" aria-label="Your QR code"></canvas>
+                <div class="qr-token-display" id="qr-token-display" aria-label="QR token for manual entry"></div>
+                <button class="btn btn-primary" id="download-qr-btn">
+                  <i class="ti ti-download"></i> Download QR Code
+                </button>
+                <p class="text-faint" style="font-size:0.75rem;text-align:center;max-width:260px;line-height:1.6">
+                  Show this code to your attendance taker, or read the token aloud if scanning fails.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Event info card -->
+          <div class="card" id="event-info-card" style="grid-column:1 / -1">
+            <div class="card-header">
+              <i class="ti ti-calendar-event"></i>
+              <span class="card-header-title">Event Details</span>
+            </div>
+            <div class="card-body" id="event-info-body">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/attendee.js"></script>
+
+<script>
+  if (window.innerWidth <= 768) {
+    document.getElementById("menu-toggle").style.display = "flex";
+  }
+</script>
+</body>
+</html>

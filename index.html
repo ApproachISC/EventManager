@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+
+    <!-- Header -->
+    <div class="auth-card-header">
+      <div class="auth-logo" aria-hidden="true">
+        <i class="ti ti-calendar-event"></i>
+      </div>
+      <h1>Event Manager</h1>
+      <p>Sign in to your account</p>
+    </div>
+
+    <!-- Body -->
+    <div class="auth-card-body">
+
+      <!-- Error alert (hidden by default) -->
+      <div id="error-alert" class="alert alert-danger mb-6" style="display:none" role="alert">
+        <i class="ti ti-alert-circle"></i>
+        <span id="error-msg">Invalid email or password.</span>
+      </div>
+
+      <form id="login-form" novalidate>
+
+        <div class="form-group">
+          <label class="form-label" for="email">
+            Email address <span class="required">*</span>
+          </label>
+          <div class="input-group">
+            <i class="ti ti-mail input-icon"></i>
+            <input
+              type="email"
+              id="email"
+              class="form-control"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <span class="form-error" id="email-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Please enter a valid email address.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">
+            Password <span class="required">*</span>
+          </label>
+          <div class="input-group">
+            <i class="ti ti-lock input-icon"></i>
+            <input
+              type="password"
+              id="password"
+              class="form-control"
+              placeholder="Your password"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              class="input-suffix btn-icon btn-ghost"
+              id="toggle-pw"
+              aria-label="Toggle password visibility"
+              style="border:none;background:none;cursor:pointer;color:var(--dark-sky-blue);"
+            >
+              <i class="ti ti-eye" id="pw-eye"></i>
+            </button>
+          </div>
+          <span class="form-error" id="pw-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Please enter your password.
+          </span>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn btn-primary btn-xl w-full mt-2">
+          <i class="ti ti-login"></i>
+          Sign In
+        </button>
+
+      </form>
+
+      <div class="divider-label mt-6">
+        <span>First time here?</span>
+      </div>
+
+      <p class="text-center text-sm text-muted">
+        You need an invitation to access Event Manager.
+        Contact your administrator if you haven't received one.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async () => {
+      // Redirect if already logged in
+      await redirectIfLoggedIn();
+
+      const form      = document.getElementById("login-form");
+      const emailIn   = document.getElementById("email");
+      const pwIn      = document.getElementById("password");
+      const submitBtn = document.getElementById("submit-btn");
+      const errAlert  = document.getElementById("error-alert");
+      const errMsg    = document.getElementById("error-msg");
+
+      // Toggle password visibility
+      document.getElementById("toggle-pw").addEventListener("click", () => {
+        const isText = pwIn.type === "text";
+        pwIn.type = isText ? "password" : "text";
+        document.getElementById("pw-eye").className = isText ? "ti ti-eye" : "ti ti-eye-off";
+      });
+
+      // Form submit
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errAlert.style.display = "none";
+
+        const email    = emailIn.value.trim();
+        const password = pwIn.value;
+        let valid = true;
+
+        // Client-side validation
+        const emailErr = document.getElementById("email-error");
+        const pwErr    = document.getElementById("pw-error");
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          emailErr.style.display = "flex";
+          emailIn.classList.add("error");
+          valid = false;
+        } else {
+          emailErr.style.display = "none";
+          emailIn.classList.remove("error");
+        }
+
+        if (!password) {
+          pwErr.style.display = "flex";
+          pwIn.classList.add("error");
+          valid = false;
+        } else {
+          pwErr.style.display = "none";
+          pwIn.classList.remove("error");
+        }
+
+        if (!valid) return;
+
+        setButtonLoading(submitBtn, true);
+
+        try {
+          const { profile } = await signIn(email, password);
+          // routeByRole handles setup_done check
+          routeByRole(profile.role, profile.setup_done);
+        } catch (err) {
+          errMsg.textContent = err.message?.includes("Invalid")
+            ? "Invalid email or password. Please try again."
+            : (err.message ?? "Something went wrong. Please try again.");
+          errAlert.style.display = "flex";
+          setButtonLoading(submitBtn, false);
+        }
+      });
+
+      // Clear errors on input
+      [emailIn, pwIn].forEach(el => {
+        el.addEventListener("input", () => {
+          el.classList.remove("error");
+          errAlert.style.display = "none";
+        });
+      });
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon" aria-hidden="true">
+        <i class="ti ti-calendar-event"></i>
+      </div>
+      <div>
+        <div class="sidebar-logo-text">Event Manager</div>
+        <div class="sidebar-logo-sub">Manager Portal</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="Sidebar navigation">
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-section-label">Main</div>
+      </div>
+      <a href="manager.html" class="sidebar-nav-item active" aria-current="page">
+        <i class="ti ti-layout-dashboard"></i>
+        Dashboard
+      </a>
+
+      <div class="sidebar-nav-section" style="margin-top:var(--space-4)">
+        <div class="sidebar-nav-section-label">Account</div>
+      </div>
+      <button class="sidebar-nav-item w-full" id="signout-btn" style="text-align:left">
+        <i class="ti ti-logout"></i>
+        Sign Out
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="sidebar-avatar" aria-hidden="true">?</div>
+        <div>
+          <div class="sidebar-user-name" id="sidebar-user-name">Loading…</div>
+          <div class="sidebar-user-role" id="sidebar-user-role">manager</div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main content ────────────────────────────────────── -->
+  <div class="app-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <!-- Mobile menu toggle -->
+      <button
+        class="btn btn-ghost btn-icon"
+        id="menu-toggle"
+        aria-label="Toggle navigation"
+        style="display:none"
+        onclick="document.getElementById('sidebar').classList.toggle('mobile-open')"
+      >
+        <i class="ti ti-menu-2"></i>
+      </button>
+
+      <div>
+        <div class="topbar-title">Dashboard</div>
+        <div class="topbar-subtitle">Manage your events</div>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="openModal('create-modal')">
+          <i class="ti ti-plus"></i>
+          New Event
+        </button>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="page-content" id="main-content">
+
+      <!-- ── Stats row ───────────────────────────────────── -->
+      <div class="grid-4" style="margin-bottom:var(--space-6)" role="region" aria-label="Event statistics">
+
+        <div class="stat-card">
+          <div class="stat-card-icon blue" aria-hidden="true">
+            <i class="ti ti-calendar"></i>
+          </div>
+          <div>
+            <div class="stat-card-value" id="stat-total">—</div>
+            <div class="stat-card-label">Total Events</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-icon green" aria-hidden="true">
+            <i class="ti ti-circle-check"></i>
+          </div>
+          <div>
+            <div class="stat-card-value" id="stat-active">—</div>
+            <div class="stat-card-label">Active</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-icon gold" aria-hidden="true">
+            <i class="ti ti-pencil"></i>
+          </div>
+          <div>
+            <div class="stat-card-value" id="stat-draft">—</div>
+            <div class="stat-card-label">Draft</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-card-icon" style="background:var(--light-warm-white);color:var(--dark-gold)" aria-hidden="true">
+            <i class="ti ti-archive"></i>
+          </div>
+          <div>
+            <div class="stat-card-value" id="stat-closed">—</div>
+            <div class="stat-card-label">Closed</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Events table card ───────────────────────────── -->
+      <div class="card">
+
+        <div class="card-header">
+          <i class="ti ti-calendar-event" aria-hidden="true"></i>
+          <span class="card-header-title">All Events</span>
+          <div class="card-header-actions">
+
+            <!-- Search -->
+            <div class="input-group" style="width:200px">
+              <i class="ti ti-search input-icon"></i>
+              <input
+                type="search"
+                id="search-input"
+                class="form-control"
+                placeholder="Search events…"
+                aria-label="Search events"
+                style="padding-left:2.2rem;font-size:0.78rem;"
+              />
+            </div>
+
+            <!-- Status filter -->
+            <select id="status-filter" class="form-control" style="width:130px;font-size:0.78rem" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+            </select>
+
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table aria-label="Events list">
+            <thead>
+              <tr>
+                <th data-sort="name" onclick="sortBy('name')" style="cursor:pointer" scope="col">
+                  Event Name
+                </th>
+                <th data-sort="start_date" onclick="sortBy('start_date')" style="cursor:pointer" scope="col">
+                  Dates
+                </th>
+                <th data-sort="status" onclick="sortBy('status')" style="cursor:pointer" scope="col">
+                  Status
+                </th>
+                <th style="text-align:center" scope="col">Periods</th>
+                <th style="text-align:center" scope="col">Attendees</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody">
+              <!-- Populated by manager.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card-footer">
+          <span class="text-xs text-faint" id="table-count"></span>
+          <button class="btn btn-outline btn-sm" onclick="openModal('create-modal')">
+            <i class="ti ti-plus"></i> Create Event
+          </button>
+        </div>
+
+      </div>
+      <!-- /Events table card -->
+
+    </main>
+  </div>
+  <!-- /app-content -->
+
+</div>
+<!-- /app-layout -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════ -->
+
+<!-- Create Event Modal -->
+<div class="modal-overlay" id="create-modal" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+  <div class="modal">
+
+    <div class="modal-header">
+      <h2 class="modal-title" id="create-modal-title">
+        <i class="ti ti-calendar-plus" style="margin-right:8px;color:var(--nd-gold)"></i>
+        Create Event
+      </h2>
+      <button class="modal-close" onclick="closeModal('create-modal')" aria-label="Close modal">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <form id="create-form" novalidate>
+
+        <!-- Event name -->
+        <div class="form-group">
+          <label class="form-label" for="ev-name">
+            Event name <span class="required">*</span>
+          </label>
+          <input
+            type="text"
+            id="ev-name"
+            class="form-control"
+            placeholder="e.g. Annual Conference 2025"
+            maxlength="120"
+            required
+          />
+          <span class="form-error" id="ev-name-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Event name is required.
+          </span>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label class="form-label" for="ev-desc">Description</label>
+          <textarea
+            id="ev-desc"
+            class="form-control"
+            placeholder="Optional — brief description of the event"
+            maxlength="500"
+            rows="3"
+          ></textarea>
+          <span class="form-hint">Max 500 characters</span>
+        </div>
+
+        <!-- Date row -->
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="ev-start">
+              Start date <span class="required">*</span>
+            </label>
+            <input type="date" id="ev-start" class="form-control" required />
+            <span class="form-error" id="ev-start-error" style="display:none">
+              <i class="ti ti-alert-circle"></i> Start date is required.
+            </span>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" for="ev-end">
+              End date <span class="required">*</span>
+            </label>
+            <input type="date" id="ev-end" class="form-control" required />
+            <span class="form-error" id="ev-end-error" style="display:none">
+              <i class="ti ti-alert-circle"></i> End date is required.
+            </span>
+          </div>
+        </div>
+
+        <div class="alert alert-info" style="margin-top:var(--space-5)">
+          <i class="ti ti-info-circle"></i>
+          <span>After creating the event you'll be taken to the event page where you can add periods, invite takers, and import attendees.</span>
+        </div>
+
+      </form>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('create-modal')">Cancel</button>
+      <button class="btn btn-primary" id="create-submit-btn" form="create-form" type="submit">
+        <i class="ti ti-plus"></i> Create Event
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+  <div class="modal" style="max-width:420px">
+
+    <div class="modal-header" style="background:var(--accent-red)">
+      <h2 class="modal-title" id="delete-modal-title">
+        <i class="ti ti-alert-triangle" style="margin-right:8px"></i>
+        Delete Event
+      </h2>
+      <button class="modal-close" onclick="closeModal('delete-modal')" aria-label="Close modal">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p style="font-size:0.9rem;line-height:1.7;color:var(--nd-blue)">
+        Are you sure you want to delete
+        <strong id="delete-event-name"></strong>?
+      </p>
+      <div class="alert alert-danger" style="margin-top:var(--space-4)">
+        <i class="ti ti-alert-circle"></i>
+        <span>This will permanently delete all periods, attendee assignments, and attendance logs for this event. This action cannot be undone.</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
+      <button class="btn btn-danger" id="delete-confirm-btn">
+        <i class="ti ti-trash"></i> Yes, Delete
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/manager.js"></script>
+
+<script>
+  // Mobile: show menu toggle on small screens
+  if (window.innerWidth <= 768) {
+    document.getElementById("menu-toggle").style.display = "flex";
+  }
+
+  // Set min date for start/end to today
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("ev-start").min = today;
+  document.getElementById("ev-end").min   = today;
+
+  // Keep end date >= start date
+  document.getElementById("ev-start").addEventListener("change", (e) => {
+    document.getElementById("ev-end").min = e.target.value;
+  });
+</script>
+
+</body>
+</html>

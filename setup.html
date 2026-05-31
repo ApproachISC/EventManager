@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set Up Your Account — Event Manager</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+
+    <!-- Header -->
+    <div class="auth-card-header">
+      <div class="auth-logo" aria-hidden="true">
+        <i class="ti ti-user-check"></i>
+      </div>
+      <h1>Welcome!</h1>
+      <p>Let's set up your account</p>
+    </div>
+
+    <!-- Body -->
+    <div class="auth-card-body">
+
+      <div class="alert alert-info mb-6" role="note">
+        <i class="ti ti-info-circle"></i>
+        <span>You've been invited to Event Manager. Enter your name and choose a password to get started.</span>
+      </div>
+
+      <!-- Error alert -->
+      <div id="error-alert" class="alert alert-danger mb-6" style="display:none" role="alert">
+        <i class="ti ti-alert-circle"></i>
+        <span id="error-msg">Something went wrong.</span>
+      </div>
+
+      <form id="setup-form" novalidate>
+
+        <!-- Name -->
+        <div class="form-group">
+          <label class="form-label" for="name">
+            Full name <span class="required">*</span>
+          </label>
+          <div class="input-group">
+            <i class="ti ti-user input-icon"></i>
+            <input
+              type="text"
+              id="name"
+              class="form-control"
+              placeholder="Jane Smith"
+              autocomplete="name"
+              required
+            />
+          </div>
+          <span class="form-error" id="name-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Please enter your full name.
+          </span>
+        </div>
+
+        <!-- New password -->
+        <div class="form-group">
+          <label class="form-label" for="new-password">
+            New password <span class="required">*</span>
+          </label>
+          <div class="input-group">
+            <i class="ti ti-lock input-icon"></i>
+            <input
+              type="password"
+              id="new-password"
+              class="form-control"
+              placeholder="At least 8 characters"
+              autocomplete="new-password"
+              required
+              minlength="8"
+            />
+            <button
+              type="button"
+              class="input-suffix"
+              id="toggle-pw1"
+              aria-label="Toggle password visibility"
+              style="border:none;background:none;cursor:pointer;color:var(--dark-sky-blue);padding-right:0.5rem;"
+            >
+              <i class="ti ti-eye" id="pw1-eye"></i>
+            </button>
+          </div>
+
+          <!-- Password strength meter -->
+          <div id="strength-bar" style="margin-top:8px;display:none">
+            <div style="height:4px;border-radius:4px;background:var(--medium-sky-blue);overflow:hidden;">
+              <div id="strength-fill" style="height:100%;width:0%;border-radius:4px;transition:width 0.3s,background 0.3s;"></div>
+            </div>
+            <p id="strength-label" class="text-xs mt-1" style="color:var(--dark-sky-blue)"></p>
+          </div>
+
+          <span class="form-error" id="pw1-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Password must be at least 8 characters.
+          </span>
+        </div>
+
+        <!-- Confirm password -->
+        <div class="form-group">
+          <label class="form-label" for="confirm-password">
+            Confirm password <span class="required">*</span>
+          </label>
+          <div class="input-group">
+            <i class="ti ti-lock-check input-icon"></i>
+            <input
+              type="password"
+              id="confirm-password"
+              class="form-control"
+              placeholder="Repeat your password"
+              autocomplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              class="input-suffix"
+              id="toggle-pw2"
+              aria-label="Toggle confirm password visibility"
+              style="border:none;background:none;cursor:pointer;color:var(--dark-sky-blue);padding-right:0.5rem;"
+            >
+              <i class="ti ti-eye" id="pw2-eye"></i>
+            </button>
+          </div>
+          <span class="form-error" id="pw2-error" style="display:none">
+            <i class="ti ti-alert-circle"></i> Passwords do not match.
+          </span>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn btn-gold btn-xl w-full mt-2">
+          <i class="ti ti-check"></i>
+          Complete Setup
+        </button>
+
+      </form>
+
+      <p class="text-center text-xs text-faint mt-4">
+        By continuing you agree to the Event Manager terms of use.
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async () => {
+      // Must be logged in to see this page
+      const session = await requireAuth([]);
+      if (!session) return;
+
+      // If already set up, go to dashboard
+      if (session.profile.setup_done) {
+        routeByRole(session.profile.role, true);
+        return;
+      }
+
+      const form    = document.getElementById("setup-form");
+      const nameIn  = document.getElementById("name");
+      const pw1In   = document.getElementById("new-password");
+      const pw2In   = document.getElementById("confirm-password");
+      const submitBtn = document.getElementById("submit-btn");
+
+      // Toggle password visibility
+      function makeToggle(btnId, inputEl, eyeId) {
+        document.getElementById(btnId).addEventListener("click", () => {
+          const isText = inputEl.type === "text";
+          inputEl.type = isText ? "password" : "text";
+          document.getElementById(eyeId).className = isText ? "ti ti-eye" : "ti ti-eye-off";
+        });
+      }
+      makeToggle("toggle-pw1", pw1In, "pw1-eye");
+      makeToggle("toggle-pw2", pw2In, "pw2-eye");
+
+      // Password strength
+      pw1In.addEventListener("input", () => {
+        const val = pw1In.value;
+        const bar = document.getElementById("strength-bar");
+        const fill = document.getElementById("strength-fill");
+        const label = document.getElementById("strength-label");
+
+        if (!val) { bar.style.display = "none"; return; }
+        bar.style.display = "block";
+
+        let score = 0;
+        if (val.length >= 8)  score++;
+        if (val.length >= 12) score++;
+        if (/[A-Z]/.test(val)) score++;
+        if (/[0-9]/.test(val)) score++;
+        if (/[^A-Za-z0-9]/.test(val)) score++;
+
+        const levels = [
+          { pct: "20%", color: "var(--accent-red)",    text: "Very weak" },
+          { pct: "40%", color: "var(--bright-gold)",   text: "Weak" },
+          { pct: "60%", color: "var(--bright-gold)",   text: "Fair" },
+          { pct: "80%", color: "var(--nd-gold)",        text: "Good" },
+          { pct: "100%",color: "var(--success-green)", text: "Strong" },
+        ];
+        const lvl = levels[Math.min(score, 4)];
+        fill.style.width      = lvl.pct;
+        fill.style.background = lvl.color;
+        label.textContent     = lvl.text;
+        label.style.color     = lvl.color;
+      });
+
+      // Form submit
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const name = nameIn.value.trim();
+        const pw1  = pw1In.value;
+        const pw2  = pw2In.value;
+        let valid  = true;
+
+        const nameErr = document.getElementById("name-error");
+        const pw1Err  = document.getElementById("pw1-error");
+        const pw2Err  = document.getElementById("pw2-error");
+        const errAlert = document.getElementById("error-alert");
+
+        if (!name) {
+          nameErr.style.display = "flex";
+          nameIn.classList.add("error");
+          valid = false;
+        } else {
+          nameErr.style.display = "none";
+          nameIn.classList.remove("error");
+        }
+
+        if (pw1.length < 8) {
+          pw1Err.style.display = "flex";
+          pw1In.classList.add("error");
+          valid = false;
+        } else {
+          pw1Err.style.display = "none";
+          pw1In.classList.remove("error");
+        }
+
+        if (pw1 !== pw2) {
+          pw2Err.style.display = "flex";
+          pw2In.classList.add("error");
+          valid = false;
+        } else {
+          pw2Err.style.display = "none";
+          pw2In.classList.remove("error");
+        }
+
+        if (!valid) return;
+
+        setButtonLoading(submitBtn, true);
+        errAlert.style.display = "none";
+
+        try {
+          await completeSetup(name, pw1);
+          showToast("Account set up successfully! Welcome 🎉", "success");
+          const profile = await getProfile();
+          setTimeout(() => routeByRole(profile.role, true), 800);
+        } catch (err) {
+          document.getElementById("error-msg").textContent =
+            err.message ?? "Failed to save your account. Please try again.";
+          errAlert.style.display = "flex";
+          setButtonLoading(submitBtn, false);
+        }
+      });
+
+      // Clear errors on input
+      [nameIn, pw1In, pw2In].forEach(el => {
+        el.addEventListener("input", () => el.classList.remove("error"));
+      });
+    })();
+  </script>
+
+</body>
+</html>
