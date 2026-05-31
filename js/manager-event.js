@@ -394,31 +394,43 @@ async function handleCSVImport(file) {
   for (const row of rows) {
     const email = (row.email ?? row.Email ?? "").trim().toLowerCase();
     const name  = (row.name  ?? row.Name  ?? "").trim();
-    const code  = (row.code  ?? row.Code  ?? "").trim().toLowerCase() || null;
+    const code  = (row.code  ?? row.Code  ?? "").trim().toLowerCase() || email;
     if (!email || !name) { failed++; done++; continue; }
 
     try {
-      // Check if profile already exists
-      const { data: existing } = await _supabase
+      // Check by email first
+      let { data: existing } = await _supabase
         .from("profiles")
         .select("id")
         .eq("email", email)
         .single();
 
+      // If not found by email, check by code already enrolled in this event
+      if (!existing) {
+        const { data: byCode } = await _supabase
+          .from("event_attendees")
+          .select("user_id")
+          .eq("event_id", _eventId)
+          .eq("qr_token", code)
+          .single();
+        if (byCode) existing = { id: byCode.user_id };
+      }
+
       let userId;
 
       if (existing) {
         userId = existing.id;
+        // Always sync name from CSV
+        await _supabase.from("profiles").update({ name }).eq("id", userId);
       } else {
-        // Create via invite flow
+        // Create via invite flow (no email sent to attendee)
         const tempPassword = generateTempPassword();
 
         // Insert invite row first (DB trigger needs it)
-        const { data: invite, error: invErr } = await _supabase
+        const { error: invErr } = await _supabase
           .from("invites")
           .insert({ email, role: "attendee", temp_password: tempPassword,
-                    event_id: _eventId, invited_by: _profile.id })
-          .select().single();
+                    event_id: _eventId, invited_by: _profile.id });
         if (invErr) throw invErr;
 
         // Create auth user via Edge Function — triggers handle_new_auth_user → creates profile
@@ -430,38 +442,13 @@ async function handleCSVImport(file) {
 
         if (!userId) throw new Error("Failed to create user account.");
 
-        // Update profile name (trigger sets role, we set name)
+        // Ensure profile name matches CSV (trigger may not set it)
         await _supabase.from("profiles").update({ name }).eq("id", userId);
-
-        // Assign to event now so qr_token exists before the email is sent
-        await _supabase.from("event_attendees").upsert(
-          { event_id: _eventId, user_id: userId, ...(code ? { qr_token: code } : {}) },
-          { onConflict: "event_id,user_id" }
-        );
-
-        // Get qr_token for the invite email
-        const { data: ea } = await _supabase
-          .from("event_attendees")
-          .select("qr_token")
-          .eq("event_id", _eventId)
-          .eq("user_id", userId)
-          .single();
-
-        // Send invite email with QR
-        await sendEmail({
-          type: "invite_attendee",
-          to: email,
-          tempPassword,
-          attendeeName: name,
-          eventName: _event.name,
-          qrToken: ea?.qr_token ?? "",
-          inviteId: invite.id,
-        });
       }
 
-      // Assign to event (idempotent — unique constraint handles dups)
+      // Assign to event — always use code from CSV (or email fallback) as qr_token
       await _supabase.from("event_attendees").upsert(
-        { event_id: _eventId, user_id: userId, ...(code ? { qr_token: code } : {}) },
+        { event_id: _eventId, user_id: userId, qr_token: code },
         { onConflict: "event_id,user_id" }
       );
 
