@@ -105,6 +105,14 @@ serve(async (req) => {
       return json({ error: createErr.message ?? "Failed to create user" }, 500);
     }
 
+    // Ensure name is persisted on the profile (trigger may have set it, this is belt-and-suspenders)
+    if (name) {
+      await adminClient
+        .from("profiles")
+        .update({ name })
+        .eq("id", newUser.user.id);
+    }
+
     return json({ user_id: newUser.user.id });
 
   } catch (err) {

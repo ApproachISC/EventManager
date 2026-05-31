@@ -13,6 +13,8 @@ let _rafId      = null;
 let _scanning   = false;
 let _lastToken  = "";     // debounce: ignore same token within 2s
 let _scanLog    = [];     // local scan history (name, time, method, duplicate)
+let _expiryInterval = null;  // checks period expiry while scanning
+let _countdownInterval = null; // live countdown in session info bar
 
 const canvas = document.createElement("canvas");
 const ctx    = canvas.getContext("2d", { willReadFrequently: true });
@@ -58,10 +60,10 @@ async function loadAssignment() {
     return;
   }
 
-  // Load all periods for this event so the taker can pick one
+  // Load all periods for this event
   const { data: periods } = await _supabase
     .from("periods")
-    .select("id, name, period_date")
+    .select("id, name, period_date, duration_minutes, opened_at, closed_at")
     .eq("event_id", _event.id)
     .order("sort_order")
     .order("period_date");
@@ -74,11 +76,6 @@ async function loadAssignment() {
   }
 
   setPageTitle(_event.name);
-  document.getElementById("session-info").innerHTML =
-    `<span style="font-weight:600;color:var(--warm-white)">${escHtml(_event.name)}</span>
-     <span style="color:var(--dark-sky-blue);margin:0 var(--space-2)">·</span>
-     <span style="color:var(--dark-sky-blue)">Select a period below to begin</span>`;
-
   showPeriodPicker();
 }
 
@@ -96,27 +93,94 @@ function showNoSession(message) {
 }
 
 // ── Period picker ─────────────────────────────────────────────
+function isOpenPeriod(p) {
+  return p.opened_at && new Date(p.closed_at).getTime() > Date.now();
+}
+
 function showPeriodPicker() {
+  clearInterval(_expiryInterval);
+  clearInterval(_countdownInterval);
+  _expiryInterval    = null;
+  _countdownInterval = null;
+
   document.getElementById("no-session-ui").style.display    = "none";
   document.getElementById("scanner-ui").style.display       = "none";
   document.getElementById("period-picker-ui").style.display = "block";
 
+  const openPeriods = _periods.filter(isOpenPeriod);
+
+  document.getElementById("session-info").innerHTML =
+    `<span style="font-weight:600;color:var(--warm-white)">${escHtml(_event.name)}</span>
+     <span style="color:var(--dark-sky-blue);margin:0 var(--space-2)">·</span>
+     <span style="color:var(--dark-sky-blue)">${openPeriods.length ? "Select a period below to begin" : "Waiting for manager to open a period…"}</span>`;
+
   const list = document.getElementById("period-list");
   if (!list) return;
-  list.innerHTML = _periods.map(p => `
-    <button class="btn btn-outline period-pick-btn" style="justify-content:flex-start;gap:var(--space-3)"
-      onclick="selectPeriod('${p.id}')">
-      <i class="ti ti-calendar-event" style="color:var(--nd-gold)"></i>
-      <div style="text-align:left">
-        <div style="font-weight:600">${escHtml(p.name)}</div>
-        <div class="text-xs text-faint">${formatDate(p.period_date)}</div>
-      </div>
-    </button>`).join("");
+
+  if (!openPeriods.length) {
+    list.innerHTML = `
+      <div style="text-align:center;padding:var(--space-6);color:var(--dark-sky-blue)">
+        <i class="ti ti-clock-pause" style="font-size:2rem;display:block;margin-bottom:var(--space-3)"></i>
+        <div style="font-weight:600;margin-bottom:var(--space-2)">No open periods</div>
+        <div class="text-xs">The manager hasn't opened any period yet. This page refreshes automatically.</div>
+      </div>`;
+    // Poll every 15 seconds until a period opens
+    const pollId = setInterval(async () => {
+      const { data } = await _supabase
+        .from("periods")
+        .select("id, name, period_date, duration_minutes, opened_at, closed_at")
+        .eq("event_id", _event.id)
+        .order("sort_order").order("period_date");
+      _periods = data ?? [];
+      if (_periods.some(isOpenPeriod)) {
+        clearInterval(pollId);
+        showPeriodPicker();
+      }
+    }, 15000);
+    return;
+  }
+
+  list.innerHTML = openPeriods.map(p => {
+    const remaining = new Date(p.closed_at).getTime() - Date.now();
+    const mm = String(Math.floor(remaining / 60000)).padStart(2, "0");
+    const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
+    return `
+      <button class="btn btn-outline period-pick-btn" style="justify-content:flex-start;gap:var(--space-3)"
+        onclick="selectPeriod('${p.id}')">
+        <i class="ti ti-calendar-event" style="color:var(--nd-gold)"></i>
+        <div style="text-align:left">
+          <div style="font-weight:600">${escHtml(p.name)}</div>
+          <div class="text-xs text-faint">${formatDate(p.period_date)}
+            &nbsp;·&nbsp;<i class="ti ti-clock" style="font-size:0.7rem"></i>
+            Closes in <span data-picker-countdown="${p.closed_at}">${mm}:${ss}</span>
+          </div>
+        </div>
+      </button>`;
+  }).join("");
+
+  // Live countdown in the picker
+  const pickerTick = setInterval(() => {
+    document.querySelectorAll("[data-picker-countdown]").forEach(el => {
+      const remaining = new Date(el.dataset.pickerCountdown).getTime() - Date.now();
+      if (remaining <= 0) {
+        clearInterval(pickerTick);
+        _periods = _periods.map(p => p);   // keep reference
+        showPeriodPicker();                // re-render (period now expired)
+        return;
+      }
+      el.textContent = `${String(Math.floor(remaining / 60000)).padStart(2, "0")}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")}`;
+    });
+  }, 1000);
 }
 
 function selectPeriod(periodId) {
   _period = _periods.find(p => p.id === periodId);
   if (!_period) return;
+  if (!isOpenPeriod(_period)) {
+    showToast("That period has just closed.", "error");
+    showPeriodPicker();
+    return;
+  }
 
   _scanLog = [];
   _lastToken = "";
@@ -124,6 +188,54 @@ function selectPeriod(periodId) {
   renderSessionInfo();
   document.getElementById("period-picker-ui").style.display = "none";
   document.getElementById("scanner-ui").style.display       = "block";
+
+  startExpiryWatch();
+}
+
+// ── Period expiry watch (while scanning) ─────────────────────
+function startExpiryWatch() {
+  clearInterval(_expiryInterval);
+  clearInterval(_countdownInterval);
+
+  // Live countdown in the session info bar
+  _countdownInterval = setInterval(() => {
+    const el = document.getElementById("period-countdown");
+    if (!el) { clearInterval(_countdownInterval); return; }
+    const remaining = new Date(_period.closed_at).getTime() - Date.now();
+    if (remaining <= 0) {
+      clearInterval(_countdownInterval);
+      return;
+    }
+    el.textContent = `${String(Math.floor(remaining / 60000)).padStart(2, "0")}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")}`;
+  }, 1000);
+
+  // Check expiry every 5 seconds
+  _expiryInterval = setInterval(async () => {
+    if (!_period) { clearInterval(_expiryInterval); return; }
+
+    // Fast client-side check first
+    if (new Date(_period.closed_at).getTime() > Date.now()) return;
+
+    // Period has expired — lock scanner and notify
+    clearInterval(_expiryInterval);
+    clearInterval(_countdownInterval);
+    stopCamera();
+    showToast(`Period "${_period.name}" has closed. No more scans accepted.`, "error");
+
+    // Reload periods and go back to picker (might be a new one open)
+    const { data } = await _supabase
+      .from("periods")
+      .select("id, name, period_date, duration_minutes, opened_at, closed_at")
+      .eq("event_id", _event.id)
+      .order("sort_order").order("period_date");
+    _periods = data ?? [];
+    _period  = null;
+
+    document.getElementById("result-banner").style.display = "none";
+    const counter = document.getElementById("scan-counter");
+    if (counter) counter.textContent = "";
+    showPeriodPicker();
+  }, 5000);
 }
 
 // ── Session info bar (shown once a period is selected) ────────
@@ -131,6 +243,11 @@ function renderSessionInfo() {
   setPageTitle(_period.name);
   const subtitle = document.getElementById("topbar-subtitle");
   if (subtitle) subtitle.textContent = `${_period.name} · ${formatDate(_period.period_date)}`;
+
+  const remaining = new Date(_period.closed_at).getTime() - Date.now();
+  const mm = String(Math.floor(remaining / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
+
   const el = document.getElementById("session-info");
   if (!el) return;
   el.innerHTML = `
@@ -146,8 +263,8 @@ function renderSessionInfo() {
       </div>
       <i class="ti ti-chevron-right" style="color:var(--nd-gold);flex-shrink:0"></i>
       <div>
-        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--dark-sky-blue)">Date</div>
-        <div style="font-weight:600;color:var(--warm-white)">${formatDate(_period.period_date)}</div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--dark-sky-blue)">Closes in</div>
+        <div style="font-weight:600;color:var(--nd-gold)" id="period-countdown">${mm}:${ss}</div>
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-3)">
         <button class="btn btn-ghost btn-sm" onclick="changePeriod()" title="Switch period" aria-label="Switch period">
@@ -162,6 +279,10 @@ function renderSessionInfo() {
 }
 
 function changePeriod() {
+  clearInterval(_expiryInterval);
+  clearInterval(_countdownInterval);
+  _expiryInterval    = null;
+  _countdownInterval = null;
   stopCamera();
   _period = null;
   const counter = document.getElementById("scan-counter");
@@ -169,10 +290,6 @@ function changePeriod() {
   const badge = document.getElementById("log-count-badge");
   if (badge) badge.textContent = "0";
   document.getElementById("result-banner").style.display = "none";
-  document.getElementById("session-info").innerHTML =
-    `<span style="font-weight:600;color:var(--warm-white)">${escHtml(_event.name)}</span>
-     <span style="color:var(--dark-sky-blue);margin:0 var(--space-2)">·</span>
-     <span style="color:var(--dark-sky-blue)">Select a period below to begin</span>`;
   showPeriodPicker();
 }
 

@@ -10,6 +10,7 @@ let _periods  = [];
 let _takers   = [];
 let _attendees = [];
 let _report   = [];   // flat rows from attendance_report()
+let _periodCountdownInterval = null;
 
 // ── Bootstrap ─────────────────────────────────────────────────
 async function init() {
@@ -53,7 +54,7 @@ async function loadEvent() {
 async function loadPeriods() {
   const { data } = await _supabase
     .from("periods")
-    .select("*")
+    .select("id, name, period_date, sort_order, duration_minutes, opened_at, closed_at")
     .eq("event_id", _eventId)
     .order("sort_order")
     .order("period_date");
@@ -150,24 +151,83 @@ async function setEventStatus(newStatus) {
 }
 
 // ── PERIODS TAB ───────────────────────────────────────────────
+function getPeriodState(p) {
+  if (!p.opened_at) return "not-opened";
+  const now = Date.now();
+  if (new Date(p.closed_at).getTime() > now) return "open";
+  return "closed";
+}
+
+function renderPeriodStatusCell(p) {
+  const state = getPeriodState(p);
+  if (state === "not-opened") {
+    return `<span class="badge badge-neutral"><i class="ti ti-clock-pause"></i> Not started</span>`;
+  }
+  if (state === "closed") {
+    return `<span class="badge badge-danger"><i class="ti ti-lock"></i> Closed</span>`;
+  }
+  const remaining = new Date(p.closed_at).getTime() - Date.now();
+  return `<span class="badge badge-active"><i class="ti ti-lock-open"></i> Open</span>
+    <span class="text-xs" style="color:var(--dark-sky-blue);display:block;margin-top:2px"
+      data-countdown="${p.closed_at}">closes in ${formatCountdown(remaining)}</span>`;
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return "00:00";
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function startCountdownTick() {
+  if (_periodCountdownInterval) return;
+  _periodCountdownInterval = setInterval(() => {
+    document.querySelectorAll("[data-countdown]").forEach(el => {
+      const remaining = new Date(el.dataset.countdown).getTime() - Date.now();
+      if (remaining <= 0) {
+        clearInterval(_periodCountdownInterval);
+        _periodCountdownInterval = null;
+        loadPeriods().then(renderPeriods);
+        return;
+      }
+      el.textContent = `closes in ${formatCountdown(remaining)}`;
+    });
+  }, 1000);
+}
+
 function renderPeriods() {
+  clearInterval(_periodCountdownInterval);
+  _periodCountdownInterval = null;
+
   const tbody = document.getElementById("periods-tbody");
   if (!tbody) return;
 
   if (!_periods.length) {
-    tbody.innerHTML = `<tr><td colspan="3"><div class="table-empty">
+    tbody.innerHTML = `<tr><td colspan="4"><div class="table-empty">
       <i class="ti ti-clock-off"></i>
       <p>No periods yet. Add a period below.</p>
     </div></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = _periods.map((p, idx) => `
+  tbody.innerHTML = _periods.map((p, idx) => {
+    const state = getPeriodState(p);
+    const canOpen = state !== "open";
+    return `
     <tr>
-      <td style="font-weight:600">${escHtml(p.name)}</td>
+      <td style="font-weight:600">
+        ${escHtml(p.name)}
+        <div class="text-xs text-faint">${p.duration_minutes} min</div>
+      </td>
       <td>${formatDate(p.period_date)}</td>
+      <td>${renderPeriodStatusCell(p)}</td>
       <td>
         <div class="td-actions">
+          <button class="btn btn-success btn-sm" title="Open period for scanning"
+            onclick="openPeriod('${p.id}', '${escHtml(p.name)}')"
+            ${canOpen ? "" : "disabled"}
+            aria-label="Open period">
+            <i class="ti ti-player-play"></i> Open
+          </button>
           <button class="btn btn-ghost btn-sm btn-icon" title="Move up"
             onclick="movePeriod('${p.id}', ${idx}, -1)"
             ${idx === 0 ? "disabled" : ""} aria-label="Move period up">
@@ -184,23 +244,46 @@ function renderPeriods() {
           </button>
         </div>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
+
+  if (_periods.some(p => getPeriodState(p) === "open")) startCountdownTick();
 
   window._periods = _periods;
   document.dispatchEvent(new CustomEvent("periods-loaded"));
 }
 
-async function addPeriod(name, date) {
+async function addPeriod(name, date, durationMinutes) {
   const { error } = await _supabase.from("periods").insert({
-    event_id:    _eventId,
+    event_id:         _eventId,
     name,
-    period_date: date,
-    sort_order:  _periods.length,
+    period_date:      date,
+    sort_order:       _periods.length,
+    duration_minutes: durationMinutes,
   });
   if (error) throw error;
   await loadPeriods();
   renderPeriods();
   renderTakers(); // refresh period names in takers tab
+}
+
+async function openPeriod(periodId, periodName) {
+  if (!confirm(`Open "${periodName}" for scanning? Any currently open period will be closed.`)) return;
+
+  const btn = document.querySelector(`[onclick*="openPeriod('${periodId}'"]`);
+  if (btn) { btn.disabled = true; btn.innerHTML = `<i class="ti ti-loader-2"></i> Opening…`; }
+
+  try {
+    const { error } = await _supabase.rpc("open_period", { p_period_id: periodId });
+    if (error) throw error;
+    await loadPeriods();
+    renderPeriods();
+    showToast(`"${periodName}" is now open for scanning.`, "success");
+  } catch (err) {
+    showToast(err.message ?? "Failed to open period.", "error");
+    await loadPeriods();
+    renderPeriods();
+  }
 }
 
 async function deletePeriod(periodId, periodName) {
@@ -669,15 +752,18 @@ function initForms() {
   // Add period form
   document.getElementById("add-period-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn  = document.getElementById("add-period-btn");
-    const name = document.getElementById("period-name").value.trim();
-    const date = document.getElementById("period-date").value;
+    const btn      = document.getElementById("add-period-btn");
+    const name     = document.getElementById("period-name").value.trim();
+    const date     = document.getElementById("period-date").value;
+    const duration = parseInt(document.getElementById("period-duration").value, 10);
 
     if (!name || !date) { showToast("Period name and date are required.", "error"); return; }
+    if (!duration || duration < 1) { showToast("Duration must be at least 1 minute.", "error"); return; }
     setButtonLoading(btn, true);
     try {
-      await addPeriod(name, date);
+      await addPeriod(name, date, duration);
       e.target.reset();
+      document.getElementById("period-duration").value = "20";
       showToast(`Period "${name}" added.`, "success");
     } catch (err) {
       showToast(err.message ?? "Failed to add period.", "error");

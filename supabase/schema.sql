@@ -64,16 +64,21 @@ comment on table public.events is
 -- ── 2.3 periods ──────────────────────────────────────────────
 -- Named sessions within an event (e.g. "Day 1 Morning").
 create table public.periods (
-  id            uuid primary key default gen_random_uuid(),
-  event_id      uuid not null references public.events(id) on delete cascade,
-  name          text not null,
-  period_date   date not null,
-  sort_order    integer not null default 0,
-  created_at    timestamptz not null default now()
+  id                uuid primary key default gen_random_uuid(),
+  event_id          uuid not null references public.events(id) on delete cascade,
+  name              text not null,
+  period_date       date not null,
+  sort_order        integer not null default 0,
+  duration_minutes  integer not null default 20,  -- how long the period stays open after being started
+  opened_at         timestamptz,                  -- null = not yet opened
+  closed_at         timestamptz,                  -- set when the period expires
+  created_at        timestamptz not null default now(),
+
+  constraint duration_positive check (duration_minutes > 0)
 );
 
 comment on table public.periods is
-  'Named time slots (periods) within an event.';
+  'Named time slots (periods) within an event. A period must be explicitly opened by a manager before scans are accepted.';
 
 
 -- ── 2.4 invites ──────────────────────────────────────────────
@@ -260,6 +265,19 @@ declare
   v_already boolean;
   v_log_id  uuid;
 begin
+  -- Check period is currently open
+  if not exists (
+    select 1 from public.periods
+    where id         = p_period_id
+      and opened_at  is not null
+      and closed_at  > now()
+  ) then
+    return json_build_object(
+      'success', false,
+      'message', 'This period is not currently open for attendance.'
+    );
+  end if;
+
   -- Duplicate check
   select public.is_already_scanned(p_period_id, p_attendee_id) into v_already;
 
@@ -295,7 +313,41 @@ end;
 $$;
 
 
--- ── 4.8 Toggle attendance override (manager only) ────────────
+-- ── 4.8 Open a period (manager only) ────────────────────────
+-- Closes any currently open periods for the event, then opens the
+-- specified period for its stored duration_minutes.
+create or replace function public.open_period(p_period_id uuid)
+returns void language plpgsql security definer as $$
+declare
+  v_event_id uuid;
+  v_duration integer;
+begin
+  select event_id, duration_minutes
+    into v_event_id, v_duration
+  from public.periods
+  where id = p_period_id;
+
+  if not public.i_manage_event(v_event_id) then
+    raise exception 'Only the event manager can open periods.';
+  end if;
+
+  -- Close any currently open periods for this event
+  update public.periods
+  set closed_at = now()
+  where event_id = v_event_id
+    and opened_at is not null
+    and (closed_at is null or closed_at > now());
+
+  -- Open the requested period
+  update public.periods
+  set opened_at = now(),
+      closed_at = now() + (v_duration || ' minutes')::interval
+  where id = p_period_id;
+end;
+$$;
+
+
+-- ── 4.10 Toggle attendance override (manager only) ───────────
 create or replace function public.toggle_attendance(
   p_log_id uuid,
   p_present boolean
@@ -318,7 +370,7 @@ end;
 $$;
 
 
--- ── 4.9 Generate temp password (6-char alphanumeric, no 0/O/1/l) ──
+-- ── 4.11 Generate temp password (6-char alphanumeric, no 0/O/1/l) ──
 create or replace function public.generate_temp_password()
 returns text language plpgsql as $$
 declare
@@ -334,7 +386,7 @@ end;
 $$;
 
 
--- ── 4.10 Full attendance report for an event (manager view) ──
+-- ── 4.12 Full attendance report for an event (manager view) ──
 -- Returns rows ready to pivot into the name + periods table.
 create or replace function public.attendance_report(p_event_id uuid)
 returns table (
@@ -406,9 +458,9 @@ begin
     raise exception 'No pending invite found for %.', new.email;
   end if;
 
-  -- Create profile
-  insert into public.profiles (id, email, role, setup_done)
-  values (new.id, new.email, v_invite.role, false);
+  -- Create profile (name comes from user_metadata set by create-user edge function)
+  insert into public.profiles (id, email, name, role, setup_done)
+  values (new.id, new.email, new.raw_user_meta_data->>'name', v_invite.role, false);
 
   -- Mark invite accepted
   update public.invites
@@ -459,6 +511,11 @@ create policy "profiles: update own"
   on public.profiles for update
   using (id = auth.uid())
   with check (id = auth.uid());
+
+-- Managers can update any profile (needed to sync name from CSV import)
+create policy "profiles: managers update all"
+  on public.profiles for update
+  using (public.my_role() = 'manager');
 
 -- Only the DB trigger (security definer) inserts profiles — no direct insert policy needed
 
@@ -709,6 +766,25 @@ create policy "attendance_logs: managers update"
 
 
 -- ============================================================
+-- MIGRATION  (existing installations only — skip on fresh setup)
+-- ============================================================
+-- Run these in the Supabase SQL Editor if upgrading an existing DB:
+--
+-- alter table public.periods
+--   add column if not exists duration_minutes integer not null default 20,
+--   add column if not exists opened_at        timestamptz,
+--   add column if not exists closed_at        timestamptz;
+--
+-- alter table public.periods
+--   add constraint if not exists duration_positive check (duration_minutes > 0);
+--
+-- Then re-run the open_period() function block above, and
+-- re-run the record_attendance() function block above to pick up
+-- the period-open check.
+-- ============================================================
+
+
+-- ============================================================
 -- DONE
 -- ============================================================
 -- Tables created:
@@ -721,7 +797,8 @@ create policy "attendance_logs: managers update"
 --   i_take_period(period_id)      → true if caller is active taker
 --   lookup_attendee_by_qr(token)  → resolve QR scan to attendee
 --   is_already_scanned(...)       → duplicate check
---   record_attendance(...)        → safe insert with dupe guard
+--   record_attendance(...)        → safe insert with dupe guard; rejects if period not open
+--   open_period(period_id)        → opens a period, closes all others for the event
 --   toggle_attendance(...)        → manager override
 --   generate_temp_password()      → 6-char alphanumeric
 --   attendance_report(event_id)   → pivot-ready report data
