@@ -1,11 +1,12 @@
 // ============================================================
 //  EVENT MANAGER — send-email Edge Function
-//  Sends transactional email via Resend.
+//  Sends transactional email via Brevo.
 //  Only authenticated managers may trigger email sends.
 //
 //  Required secrets:
-//    RESEND_API_KEY   (from resend.com dashboard)
-//    FROM_EMAIL       e.g. "noreply@yourdomain.com"
+//    BREVO_API_KEY    (from brevo.com → Settings → API Keys)
+//    FROM_EMAIL       e.g. "noreply@youremail.com"
+//    FROM_NAME        e.g. "Event Manager"  (optional, defaults to "Event Manager")
 //    APP_URL          e.g. "https://yourorg.github.io/event-manager"
 //    SUPABASE_URL     (auto-set)
 //    SUPABASE_ANON_KEY (auto-set)
@@ -313,30 +314,31 @@ serve(async (req) => {
         return json({ error: `Unknown email type: ${type}` }, 400);
     }
 
-    // 4. Send via Resend
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) return json({ error: "RESEND_API_KEY not configured" }, 500);
+    // 4. Send via Brevo
+    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+    if (!brevoApiKey) return json({ error: "BREVO_API_KEY not configured" }, 500);
 
-    const fromEmail = Deno.env.get("FROM_EMAIL") ?? "noreply@yourdomain.com";
+    const fromEmail = Deno.env.get("FROM_EMAIL") ?? "noreply@example.com";
+    const fromName  = Deno.env.get("FROM_NAME")  ?? "Event Manager";
 
-    const resendResp = await fetch("https://api.resend.com/emails", {
+    const brevoResp = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${resendApiKey}`,
-        "Content-Type":  "application/json",
+        "api-key":      brevoApiKey,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from:    fromEmail,
-        to:      [to],
-        subject: email.subject,
-        html:    email.html,
+        sender:      { email: fromEmail, name: fromName },
+        to:          [{ email: to }],
+        subject:     email.subject,
+        htmlContent: email.html,
       }),
     });
 
-    if (!resendResp.ok) {
-      const errBody = await resendResp.text();
-      console.error("Resend API error:", errBody);
-      return json({ error: `Email delivery failed: ${resendResp.status}` }, 502);
+    if (!brevoResp.ok) {
+      const errBody = await brevoResp.text();
+      console.error("Brevo API error:", errBody);
+      return json({ error: `Email delivery failed: ${brevoResp.status}` }, 502);
     }
 
     // 5. Update invites.last_sent_at if inviteId was provided

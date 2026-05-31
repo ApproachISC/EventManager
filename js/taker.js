@@ -39,7 +39,7 @@ async function loadAssignment() {
     .eq("user_id", _profile.id)
     .eq("is_active", true)
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     showNoSession("You have no active session assignment.");
