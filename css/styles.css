@@ -640,7 +640,7 @@ h5 { font-size: 0.95rem; }
   background: var(--success-green);
   color: #fff;
 }
-.btn-success:hover { background: #2e552e; }
+.btn-success:hover { background: #2e552e; color: #fff; }
 
 .btn-light {
   background: var(--light-warm-white);
