@@ -5,44 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Take Attendance — Event Manager</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <style>
-    /* Full-height scanner layout on mobile */
-    @media (max-width: 768px) {
-      .taker-grid { grid-template-columns: 1fr !important; }
-      .scanner-wrap { aspect-ratio: 1/1; }
-    }
-
-    .taker-grid {
-      display: grid;
-      grid-template-columns: 1fr 380px;
-      gap: var(--space-5);
-      align-items: start;
-    }
-
-    /* Session info banner */
-    #session-info-bar {
-      background: var(--medium-blue);
-      border-bottom: 2px solid var(--nd-gold);
-      padding: var(--space-3) var(--space-8);
-    }
-
-    /* Scan log scroll area */
-    #scan-log-list {
-      max-height: 480px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      padding: var(--space-3);
-    }
-
-    /* Result banner */
-    #result-banner {
-      display: none;
-      margin-bottom: var(--space-4);
-      animation: slideDown 0.22s ease;
-    }
-  </style>
 </head>
 <body>
 <div class="app-layout">

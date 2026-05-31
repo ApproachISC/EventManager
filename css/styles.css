@@ -1757,3 +1757,66 @@ tbody td {
   color: var(--dark-sky-blue);
   white-space: nowrap;
 }
+
+
+/* ============================================================
+   taker.html — scanner layout
+   ============================================================ */
+
+.taker-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+#session-info-bar {
+  background: var(--medium-blue);
+  border-bottom: 2px solid var(--nd-gold);
+  padding: var(--space-3) var(--space-8);
+}
+
+#scan-log-list {
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+#result-banner {
+  display: none;
+  margin-bottom: var(--space-4);
+  animation: slideDown 0.22s ease;
+}
+
+@media (max-width: 768px) {
+  .taker-grid { grid-template-columns: 1fr !important; }
+  .scanner-wrap { aspect-ratio: 1/1; }
+}
+
+
+/* ============================================================
+   manager-event.html — CSV import progress bar
+   ============================================================ */
+
+#import-progress {
+  display: none;
+  margin-top: var(--space-3);
+}
+
+#import-progress-track {
+  height: 6px;
+  background: var(--medium-sky-blue);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+#import-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--success-green);
+  border-radius: var(--radius-full);
+  transition: width 0.2s;
+}
