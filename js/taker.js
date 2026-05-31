@@ -21,7 +21,7 @@ const ctx    = canvas.getContext("2d", { willReadFrequently: true });
 
 // ── Bootstrap ─────────────────────────────────────────────────
 async function init() {
-  const session = await requireAuth(["taker"]);
+  const session = await requireAuth(["taker", "manager"]);
   if (!session) return;
   _profile = session.profile;
 
@@ -35,6 +35,11 @@ async function init() {
 
 // ── Load taker's event assignment ─────────────────────────────
 async function loadAssignment() {
+  if (_profile.role === "manager") {
+    await loadAssignmentForManager();
+    return;
+  }
+
   const { data, error } = await _supabase
     .from("event_takers")
     .select("id, is_active, events ( id, name, status )")
@@ -77,6 +82,67 @@ async function loadAssignment() {
 
   setPageTitle(_event.name);
   showPeriodPicker();
+}
+
+// ── Manager taking attendance directly ────────────────────────
+async function loadAssignmentForManager() {
+  const eventId = getParam("event_id");
+  if (!eventId) {
+    showNoSession("No event specified.");
+    return;
+  }
+
+  injectManagerBackLink(eventId);
+
+  const { data, error } = await _supabase
+    .from("events")
+    .select("id, name, status")
+    .eq("id", eventId)
+    .eq("created_by", _profile.id)
+    .single();
+
+  if (error || !data) {
+    showNoSession("Event not found or you don't have access.");
+    return;
+  }
+
+  _event = data;
+
+  if (_event.status !== "active") {
+    showNoSession(
+      _event.status === "draft"
+        ? `"${_event.name}" hasn't opened for attendance yet.`
+        : `"${_event.name}" is closed.`
+    );
+    return;
+  }
+
+  const { data: periods } = await _supabase
+    .from("periods")
+    .select("id, name, period_date, duration_minutes, opened_at, closed_at")
+    .eq("event_id", _event.id)
+    .order("sort_order")
+    .order("period_date");
+
+  _periods = periods ?? [];
+
+  if (!_periods.length) {
+    showNoSession(`"${_event.name}" has no periods defined yet.`);
+    return;
+  }
+
+  setPageTitle(_event.name);
+  showPeriodPicker();
+}
+
+function injectManagerBackLink(eventId) {
+  const nav = document.querySelector(".sidebar-nav");
+  if (!nav) return;
+  const backLink = document.createElement("a");
+  backLink.href      = `manager-event.html?id=${eventId}`;
+  backLink.className = "sidebar-nav-item";
+  backLink.innerHTML = `<i class="ti ti-arrow-left"></i> Back to Event`;
+  nav.insertBefore(backLink, nav.firstChild);
 }
 
 // ── No active session state ───────────────────────────────────

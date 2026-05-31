@@ -129,6 +129,12 @@ function renderEventHeader() {
   if (toActive) toActive.style.display = _event.status === "draft"   ? "inline-flex" : "none";
   if (toClosed) toClosed.style.display = _event.status === "active"  ? "inline-flex" : "none";
   if (toDraft)  toDraft.style.display  = _event.status === "closed"  ? "inline-flex" : "none";
+
+  const takeAttendanceBtn = document.getElementById("btn-take-attendance");
+  if (takeAttendanceBtn) {
+    takeAttendanceBtn.href = `taker.html?event_id=${_eventId}`;
+    takeAttendanceBtn.style.display = _event.status === "active" ? "inline-flex" : "none";
+  }
 }
 
 // ── Status transitions ────────────────────────────────────────
