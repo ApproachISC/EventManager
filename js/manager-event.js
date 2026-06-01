@@ -359,6 +359,11 @@ function renderTakers() {
             <i class="ti ti-${t.is_active ? "player-pause" : "player-play"}"></i>
             ${t.is_active ? "Deactivate" : "Activate"}
           </button>
+          <button class="btn btn-gold btn-sm" title="Promote to manager"
+            onclick="promoteToManager('${t.user_id}', '${escHtml(email)}')"
+            aria-label="Promote to manager">
+            <i class="ti ti-crown"></i> Make Manager
+          </button>
         </div>
       </td>
     </tr>`;
@@ -394,6 +399,22 @@ async function toggleTaker(eventTakerId, newActive) {
     showToast(`Taker ${newActive ? "activated" : "deactivated"}.`, "success");
   } catch (err) {
     showToast(err.message ?? "Failed to update taker.", "error");
+  }
+}
+
+async function promoteToManager(userId, email) {
+  if (!confirm(`Promote ${email} to manager? They will gain full manager access to all events.`)) return;
+  try {
+    const { error } = await _supabase
+      .from("profiles")
+      .update({ role: "manager" })
+      .eq("id", userId);
+    if (error) throw error;
+    await loadTakers();
+    renderTakers();
+    showToast(`${email} is now a manager.`, "success");
+  } catch (err) {
+    showToast(err.message ?? "Failed to promote taker.", "error");
   }
 }
 
