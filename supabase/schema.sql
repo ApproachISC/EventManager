@@ -195,12 +195,21 @@ $$;
 
 
 -- ── 4.3 Check if current user manages an event ───────────────
+-- Returns true for the event creator OR any manager assigned as a taker.
 create or replace function public.i_manage_event(p_event_id uuid)
 returns boolean language sql stable security definer as $$
   select exists (
     select 1 from public.events
     where id = p_event_id
       and created_by = auth.uid()
+  )
+  or (
+    public.my_role() = 'manager'
+    and exists (
+      select 1 from public.event_takers
+      where event_id = p_event_id
+        and user_id  = auth.uid()
+    )
   );
 $$;
 
@@ -583,6 +592,18 @@ create policy "events: managers update own"
     and created_by = auth.uid()
   );
 
+-- Managers assigned as takers can also update the event (e.g. status transitions)
+create policy "events: managers update as taker"
+  on public.events for update
+  using (
+    public.my_role() = 'manager'
+    and exists (
+      select 1 from public.event_takers et
+      where et.event_id = events.id
+        and et.user_id  = auth.uid()
+    )
+  );
+
 -- Only the event's manager can delete it
 create policy "events: managers delete own"
   on public.events for delete
@@ -798,6 +819,38 @@ create policy "attendance_logs: managers update"
 --
 -- create policy "events: managers read as taker"
 --   on public.events for select
+--   using (
+--     public.my_role() = 'manager'
+--     and exists (
+--       select 1 from public.event_takers et
+--       where et.event_id = events.id
+--         and et.user_id  = auth.uid()
+--     )
+--   );
+--
+-- To give managers assigned as takers full management power (periods, takers,
+-- attendees, report, status transitions), replace i_manage_event() and add
+-- the events update policy:
+--
+-- create or replace function public.i_manage_event(p_event_id uuid)
+-- returns boolean language sql stable security definer as $$
+--   select exists (
+--     select 1 from public.events
+--     where id = p_event_id
+--       and created_by = auth.uid()
+--   )
+--   or (
+--     public.my_role() = 'manager'
+--     and exists (
+--       select 1 from public.event_takers
+--       where event_id = p_event_id
+--         and user_id  = auth.uid()
+--     )
+--   );
+-- $$;
+--
+-- create policy "events: managers update as taker"
+--   on public.events for update
 --   using (
 --     public.my_role() = 'manager'
 --     and exists (
