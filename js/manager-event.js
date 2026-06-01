@@ -65,7 +65,7 @@ async function loadPeriods() {
 async function loadTakers() {
   const { data } = await _supabase
     .from("event_takers")
-    .select("*, profiles(name, email)")
+    .select("*, profiles(name, email, role)")
     .eq("event_id", _eventId)
     .order("created_at");
   _takers = data ?? [];
@@ -362,11 +362,12 @@ function renderTakers() {
             <i class="ti ti-${t.is_active ? "player-pause" : "player-play"}"></i>
             ${t.is_active ? "Deactivate" : "Activate"}
           </button>
+          ${t.profiles?.role !== "manager" ? `
           <button class="btn btn-gold btn-sm" title="Promote to manager"
             onclick="promoteToManager('${t.user_id}', '${escHtml(email)}')"
             aria-label="Promote to manager">
             <i class="ti ti-crown"></i> Make Manager
-          </button>
+          </button>` : ""}
         </div>` : ""}
       </td>
     </tr>`;
