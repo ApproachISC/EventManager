@@ -98,7 +98,6 @@ async function loadAssignmentForManager() {
     .from("events")
     .select("id, name, status")
     .eq("id", eventId)
-    .eq("created_by", _profile.id)
     .single();
 
   if (error || !data) {
