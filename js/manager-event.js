@@ -6,6 +6,7 @@
 let _eventId  = null;
 let _event    = null;
 let _profile  = null;
+let _isCreator = false;  // true when the logged-in manager created this event
 let _periods  = [];
 let _takers   = [];
 let _attendees = [];
@@ -39,7 +40,6 @@ async function loadEvent() {
     .from("events")
     .select("*")
     .eq("id", _eventId)
-    .eq("created_by", _profile.id)
     .single();
 
   if (error || !data) {
@@ -48,6 +48,7 @@ async function loadEvent() {
     return;
   }
   _event = data;
+  _isCreator = data.created_by === _profile.id;
   renderEventHeader();
 }
 
@@ -126,9 +127,9 @@ function renderEventHeader() {
   const toClosed = document.getElementById("btn-to-closed");
   const toDraft  = document.getElementById("btn-to-draft");
 
-  if (toActive) toActive.style.display = _event.status === "draft"   ? "inline-flex" : "none";
-  if (toClosed) toClosed.style.display = _event.status === "active"  ? "inline-flex" : "none";
-  if (toDraft)  toDraft.style.display  = _event.status === "closed"  ? "inline-flex" : "none";
+  if (toActive) toActive.style.display = (_isCreator && _event.status === "draft")   ? "inline-flex" : "none";
+  if (toClosed) toClosed.style.display = (_isCreator && _event.status === "active")  ? "inline-flex" : "none";
+  if (toDraft)  toDraft.style.display  = (_isCreator && _event.status === "closed")  ? "inline-flex" : "none";
 
   const takeAttendanceBtn = document.getElementById("btn-take-attendance");
   if (takeAttendanceBtn) {
@@ -227,6 +228,7 @@ function renderPeriods() {
       <td>${formatDate(p.period_date)}</td>
       <td>${renderPeriodStatusCell(p)}</td>
       <td>
+        ${_isCreator ? `
         <div class="td-actions">
           <button class="btn btn-success btn-sm" title="Open period for scanning"
             onclick="openPeriod('${p.id}', '${escHtml(p.name)}')"
@@ -248,7 +250,7 @@ function renderPeriods() {
             onclick="deletePeriod('${p.id}', '${escHtml(p.name)}')" aria-label="Delete period">
             <i class="ti ti-trash"></i>
           </button>
-        </div>
+        </div>` : ""}
       </td>
     </tr>`;
   }).join("");
@@ -348,6 +350,7 @@ function renderTakers() {
       </td>
       <td>${formatDate(t.created_at)}</td>
       <td>
+        ${_isCreator ? `
         <div class="td-actions">
           <button class="btn btn-outline btn-sm" title="Resend invite"
             onclick="handleResend('${t.id}', '${escHtml(email)}')" aria-label="Resend invite">
@@ -364,7 +367,7 @@ function renderTakers() {
             aria-label="Promote to manager">
             <i class="ti ti-crown"></i> Make Manager
           </button>
-        </div>
+        </div>` : ""}
       </td>
     </tr>`;
   }).join("");
@@ -451,12 +454,13 @@ function renderAttendees() {
       <td><code style="font-size:0.72rem;background:var(--light-sky-blue);padding:2px 6px;border-radius:4px">${a.qr_token.slice(0, 8).toUpperCase()}…</code></td>
       <td>${formatDate(a.assigned_at)}</td>
       <td>
+        ${_isCreator ? `
         <div class="td-actions">
           <button class="btn btn-outline btn-sm btn-icon" title="Remove attendee"
             onclick="removeAttendee('${a.id}', '${escHtml(name)}')" aria-label="Remove attendee">
             <i class="ti ti-user-minus"></i>
           </button>
-        </div>
+        </div>` : ""}
       </td>
     </tr>`;
   }).join("");
@@ -778,6 +782,18 @@ function exportReportCSV() {
 
 // ── Form initialisation ───────────────────────────────────────
 function initForms() {
+  if (!_isCreator) {
+    // Hide management-only sections for events this manager didn't create
+    document.getElementById("add-period-form")?.closest(".card")?.style.setProperty("display", "none");
+    document.getElementById("invite-taker-form")?.closest(".card")?.style.setProperty("display", "none");
+    document.querySelector("#tab-attendees .grid-2")?.style.setProperty("display", "none");
+
+    document.getElementById("download-qr-btn")?.addEventListener("click", downloadQRSheet);
+    document.getElementById("export-csv-btn")?.addEventListener("click", exportReportCSV);
+    document.getElementById("signout-btn")?.addEventListener("click", signOut);
+    return;
+  }
+
   // Add period form
   document.getElementById("add-period-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();

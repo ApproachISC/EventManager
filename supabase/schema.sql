@@ -530,6 +530,18 @@ create policy "events: managers read own"
     and created_by = auth.uid()
   );
 
+-- Managers who are assigned as takers can also read those events
+create policy "events: managers read as taker"
+  on public.events for select
+  using (
+    public.my_role() = 'manager'
+    and exists (
+      select 1 from public.event_takers et
+      where et.event_id = events.id
+        and et.user_id  = auth.uid()
+    )
+  );
+
 -- Takers see events they are assigned to (any active period)
 create policy "events: takers read assigned"
   on public.events for select
@@ -781,6 +793,19 @@ create policy "attendance_logs: managers update"
 -- Then re-run the open_period() function block above, and
 -- re-run the record_attendance() function block above to pick up
 -- the period-open check.
+--
+-- To allow managers to see events they are assigned to as takers:
+--
+-- create policy "events: managers read as taker"
+--   on public.events for select
+--   using (
+--     public.my_role() = 'manager'
+--     and exists (
+--       select 1 from public.event_takers et
+--       where et.event_id = events.id
+--         and et.user_id  = auth.uid()
+--     )
+--   );
 -- ============================================================
 
 

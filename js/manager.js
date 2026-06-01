@@ -3,8 +3,9 @@
 //  Manager dashboard: event list, stats, create/delete events
 // ============================================================
 
-let _events   = [];
-let _profile  = null;
+let _events     = [];
+let _profile    = null;
+let _myEventIds = new Set(); // IDs of events I created (vs. assigned as taker only)
 
 // ── Bootstrap ─────────────────────────────────────────────────
 async function init() {
@@ -24,16 +25,30 @@ async function init() {
 async function loadEvents() {
   showTableSkeleton();
 
-  const { data, error } = await _supabase
+  // Find events where I'm assigned as a taker
+  const { data: takerRows } = await _supabase
+    .from("event_takers")
+    .select("event_id")
+    .eq("user_id", _profile.id);
+  const takerEventIds = takerRows?.map(t => t.event_id) ?? [];
+
+  let query = _supabase
     .from("events")
     .select(`
-      id, name, description, start_date, end_date, status, created_at,
+      id, name, description, start_date, end_date, status, created_at, created_by,
       periods(id),
       event_attendees(id),
       event_takers(id)
     `)
-    .eq("created_by", _profile.id)
     .order("created_at", { ascending: false });
+
+  if (takerEventIds.length) {
+    query = query.or(`created_by.eq.${_profile.id},id.in.(${takerEventIds.join(",")})`);
+  } else {
+    query = query.eq("created_by", _profile.id);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     showToast("Failed to load events.", "error");
@@ -42,6 +57,7 @@ async function loadEvents() {
   }
 
   _events = data ?? [];
+  _myEventIds = new Set(_events.filter(e => e.created_by === _profile.id).map(e => e.id));
   renderStats();
   renderTable(_events);
 }
@@ -86,9 +102,9 @@ function renderTable(events) {
   }
 
   tbody.innerHTML = events.map(e => {
-    const periods   = e.periods?.length   ?? 0;
-    const attendees = e.event_attendees?.length ?? 0;
-    const takers    = e.event_takers?.length    ?? 0;
+    const isOwner   = _myEventIds.has(e.id);
+    const periods   = e.periods?.length          ?? 0;
+    const attendees = e.event_attendees?.length  ?? 0;
 
     return `
     <tr>
@@ -96,6 +112,9 @@ function renderTable(events) {
         <div style="font-weight:600;color:var(--nd-blue)">${escHtml(e.name)}</div>
         ${e.description
           ? `<div class="text-xs text-faint" style="margin-top:2px">${escHtml(e.description.slice(0, 60))}${e.description.length > 60 ? "…" : ""}</div>`
+          : ""}
+        ${!isOwner
+          ? `<span class="badge badge-neutral" style="margin-top:4px;font-size:0.65rem"><i class="ti ti-user-scan"></i> Assigned as Taker</span>`
           : ""}
       </td>
       <td>${formatDate(e.start_date)}<br><span class="text-xs text-faint">${formatDate(e.end_date)}</span></td>
@@ -113,6 +132,7 @@ function renderTable(events) {
           <a href="manager-event.html?id=${e.id}" class="btn btn-primary btn-sm btn-icon" title="Open event" aria-label="Open event">
             <i class="ti ti-arrow-right"></i>
           </a>
+          ${isOwner ? `
           <button class="btn btn-outline btn-sm btn-icon" title="Duplicate event" aria-label="Duplicate event"
             onclick="duplicateEvent('${e.id}')">
             <i class="ti ti-copy"></i>
@@ -120,7 +140,7 @@ function renderTable(events) {
           <button class="btn btn-danger btn-sm btn-icon" title="Delete event" aria-label="Delete event"
             onclick="confirmDelete('${e.id}', '${escHtml(e.name)}')">
             <i class="ti ti-trash"></i>
-          </button>
+          </button>` : ""}
         </div>
       </td>
     </tr>`;
