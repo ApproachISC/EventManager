@@ -455,7 +455,7 @@ async function handleScan(token, method = "qr") {
   try {
     // 1. Resolve token → attendee
     const { data: attendees, error: lookupErr } = await _supabase
-      .rpc("lookup_attendee_by_qr", { p_token: token.toLowerCase() });
+      .rpc("lookup_attendee_by_qr", { p_token: token.toLowerCase(), p_event_id: _event.id });
 
     if (lookupErr || !attendees?.length) {
       showResultBanner("unknown", "QR code not recognised", "This code is not registered for any attendee.", null);

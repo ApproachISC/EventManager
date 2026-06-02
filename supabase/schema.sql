@@ -124,10 +124,11 @@ create table public.event_attendees (
   id            uuid primary key default gen_random_uuid(),
   event_id      uuid not null references public.events(id) on delete cascade,
   user_id       uuid not null references public.profiles(id) on delete cascade,
-  qr_token      text not null unique default encode(gen_random_bytes(16), 'hex'),
+  qr_token      text not null default encode(gen_random_bytes(16), 'hex'),
   assigned_at   timestamptz not null default now(),
 
-  unique (event_id, user_id)                -- attendee appears once per event
+  unique (event_id, user_id),               -- attendee appears once per event
+  unique (event_id, qr_token)               -- code must be unique within an event
 );
 
 comment on table public.event_attendees is
@@ -230,7 +231,7 @@ $$;
 -- ── 4.5 Lookup attendee by qr_token ─────────────────────────
 -- Called by the taker page when a QR code is scanned.
 -- Returns attendee info without exposing the full table.
-create or replace function public.lookup_attendee_by_qr(p_token text)
+create or replace function public.lookup_attendee_by_qr(p_token text, p_event_id uuid default null)
 returns table (
   attendee_id   uuid,
   name          text,
@@ -244,7 +245,8 @@ returns table (
     ea.event_id
   from public.event_attendees ea
   join public.profiles p on p.id = ea.user_id
-  where ea.qr_token = p_token;
+  where ea.qr_token = p_token
+    and (p_event_id is null or ea.event_id = p_event_id);
 $$;
 
 
