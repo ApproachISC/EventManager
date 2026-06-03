@@ -12,6 +12,12 @@ let _takers   = [];
 let _attendees = [];
 let _report   = [];   // flat rows from attendance_report()
 let _periodCountdownInterval = null;
+let _attendeesSearch = "";
+let _attendeesPage   = 1;
+const ATTENDEES_PAGE_SIZE = 15;
+
+let _reportPage = 1;
+const REPORT_PAGE_SIZE = 15;
 
 // ── Bootstrap ─────────────────────────────────────────────────
 async function init() {
@@ -431,12 +437,37 @@ function renderAttendees() {
   if (!_attendees.length) {
     tbody.innerHTML = `<tr><td colspan="4"><div class="table-empty">
       <i class="ti ti-users-group"></i>
-      <p>No attendees yet. Import a CSV file to add attendees.</p>
+      <p>No attendees yet. Import a CSV file or add attendees manually.</p>
     </div></td></tr>`;
+    renderAttendeePagination(1, 0);
     return;
   }
 
-  tbody.innerHTML = _attendees.map(a => {
+  const query = _attendeesSearch.toLowerCase();
+  const visible = query
+    ? _attendees.filter(a => {
+        const name  = (a.profiles?.name  ?? "").toLowerCase();
+        const email = (a.profiles?.email ?? "").toLowerCase();
+        return name.includes(query) || email.includes(query);
+      })
+    : _attendees;
+
+  if (!visible.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="table-empty">
+      <i class="ti ti-search-off"></i>
+      <p>No attendees match your search.</p>
+    </div></td></tr>`;
+    renderAttendeePagination(1, 0);
+    return;
+  }
+
+  const totalPages = Math.ceil(visible.length / ATTENDEES_PAGE_SIZE);
+  if (_attendeesPage > totalPages) _attendeesPage = totalPages;
+
+  const start    = (_attendeesPage - 1) * ATTENDEES_PAGE_SIZE;
+  const pageRows = visible.slice(start, start + ATTENDEES_PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(a => {
     const name  = a.profiles?.name  ?? "—";
     const email = a.profiles?.email ?? "—";
     return `
@@ -454,6 +485,10 @@ function renderAttendees() {
       <td>${formatDate(a.assigned_at)}</td>
       <td>
         <div class="td-actions">
+          <button class="btn btn-outline btn-sm btn-icon" title="Print QR label"
+            onclick="openQrPositionModal('${a.id}', '${escHtml(name)}')" aria-label="Print QR label">
+            <i class="ti ti-qrcode"></i>
+          </button>
           <button class="btn btn-outline btn-sm btn-icon" title="Remove attendee"
             onclick="removeAttendee('${a.id}', '${escHtml(name)}')" aria-label="Remove attendee">
             <i class="ti ti-user-minus"></i>
@@ -462,6 +497,42 @@ function renderAttendees() {
       </td>
     </tr>`;
   }).join("");
+
+  renderAttendeePagination(_attendeesPage, totalPages);
+}
+
+function renderAttendeePagination(current, total) {
+  const el = document.getElementById("attendees-pagination");
+  if (!el) return;
+  if (total <= 1) { el.innerHTML = ""; return; }
+
+  const pages = [];
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (current > 3) pages.push("…");
+    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+  }
+
+  el.innerHTML = `
+    <button class="page-btn" onclick="setAttendeesPage(${current - 1})" ${current === 1 ? "disabled" : ""} aria-label="Previous page">
+      <i class="ti ti-chevron-left"></i>
+    </button>
+    ${pages.map(p => p === "…"
+      ? `<span style="width:30px;text-align:center;font-size:0.78rem;color:var(--color-text-muted)">…</span>`
+      : `<button class="page-btn ${p === current ? "active" : ""}" onclick="setAttendeesPage(${p})" aria-label="Page ${p}">${p}</button>`
+    ).join("")}
+    <button class="page-btn" onclick="setAttendeesPage(${current + 1})" ${current === total ? "disabled" : ""} aria-label="Next page">
+      <i class="ti ti-chevron-right"></i>
+    </button>`;
+}
+
+function setAttendeesPage(page) {
+  _attendeesPage = page;
+  renderAttendees();
 }
 
 async function removeAttendee(attendeeEventId, name) {
@@ -471,6 +542,130 @@ async function removeAttendee(attendeeEventId, name) {
   await loadAttendees();
   renderAttendees();
   showToast(`${name} removed.`, "success");
+}
+
+// ── SINGLE QR PRINT ──────────────────────────────────────────
+let _qrPrintAttendeeId = null;
+let _qrPrintPosition   = null;
+let _averyGridBuilt    = false;
+
+function openQrPositionModal(attendeeId, name) {
+  _qrPrintAttendeeId = attendeeId;
+  _qrPrintPosition   = null;
+
+  document.getElementById("qr-pos-attendee-name").textContent = name;
+  document.getElementById("qr-pos-hint").textContent = "";
+  document.getElementById("btn-print-qr").disabled = true;
+
+  if (!_averyGridBuilt) {
+    const grid = document.getElementById("avery-grid");
+    for (let i = 1; i <= 30; i++) {
+      const cell = document.createElement("div");
+      cell.className   = "avery-cell";
+      cell.dataset.pos = i;
+      cell.textContent = i;
+      cell.title       = `Position ${i} (Row ${Math.ceil(i / 3)}, Col ${((i - 1) % 3) + 1})`;
+      cell.addEventListener("click", () => selectQrPosition(i));
+      grid.appendChild(cell);
+    }
+    _averyGridBuilt = true;
+  } else {
+    document.querySelectorAll(".avery-cell").forEach(c => c.classList.remove("selected"));
+  }
+
+  document.getElementById("modal-qr-position").classList.add("open");
+}
+
+function selectQrPosition(pos) {
+  _qrPrintPosition = pos;
+  document.querySelectorAll(".avery-cell").forEach(c => {
+    c.classList.toggle("selected", parseInt(c.dataset.pos) === pos);
+  });
+  const row = Math.ceil(pos / 3);
+  const col = ((pos - 1) % 3) + 1;
+  document.getElementById("qr-pos-hint").textContent =
+    `Position ${pos} — Row ${row}, Column ${col}`;
+  document.getElementById("btn-print-qr").disabled = false;
+}
+
+function closeQrPositionModal() {
+  document.getElementById("modal-qr-position")?.classList.remove("open");
+  _qrPrintAttendeeId = null;
+  _qrPrintPosition   = null;
+}
+
+function doPrintSingleQr() {
+  if (!_qrPrintAttendeeId || !_qrPrintPosition) return;
+  window.open(
+    `qr-sheet.html?event_id=${_eventId}&attendee_id=${_qrPrintAttendeeId}&start_pos=${_qrPrintPosition}`,
+    "_blank"
+  );
+  closeQrPositionModal();
+}
+
+function openAddAttendeeModal() {
+  const overlay = document.getElementById("modal-add-attendee");
+  if (!overlay) return;
+  document.getElementById("add-attendee-form")?.reset();
+  const codeInput = document.getElementById("add-att-code");
+  if (codeInput) codeInput.disabled = false;
+  document.getElementById("modal-added-list").style.display = "none";
+  document.getElementById("modal-added-ul").innerHTML = "";
+  overlay.classList.add("open");
+  setTimeout(() => document.getElementById("add-att-name")?.focus(), 60);
+}
+
+function closeAddAttendeeModal() {
+  document.getElementById("modal-add-attendee")?.classList.remove("open");
+}
+
+async function addSingleAttendee({ name, email, code }) {
+  let { data: existing } = await _supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", email)
+    .single();
+
+  if (!existing && code !== email) {
+    const { data: byCode } = await _supabase
+      .from("event_attendees")
+      .select("user_id")
+      .eq("event_id", _eventId)
+      .eq("qr_token", code)
+      .single();
+    if (byCode) existing = { id: byCode.user_id };
+  }
+
+  let userId;
+
+  if (existing) {
+    userId = existing.id;
+    await _supabase.from("profiles").update({ name }).eq("id", userId);
+  } else {
+    const tempPassword = generateTempPassword();
+
+    const { error: invErr } = await _supabase
+      .from("invites")
+      .insert({ email, role: "attendee", temp_password: tempPassword,
+                event_id: _eventId, invited_by: _profile.id });
+    if (invErr) throw invErr;
+
+    const { data: createData, error: createErr } = await _supabase.functions.invoke("create-user", {
+      body: { email, password: tempPassword, role: "attendee", name },
+    });
+    if (createErr) throw createErr;
+    userId = createData?.user_id;
+    if (!userId) throw new Error("Failed to create user account.");
+    await _supabase.from("profiles").update({ name }).eq("id", userId);
+  }
+
+  await _supabase.from("event_attendees").upsert(
+    { event_id: _eventId, user_id: userId, qr_token: code },
+    { onConflict: "event_id,user_id" }
+  );
+
+  await loadAttendees();
+  renderAttendees();
 }
 
 // ── CSV Import ────────────────────────────────────────────────
@@ -588,57 +783,12 @@ async function handleCSVImport(file) {
 }
 
 // ── Print / Download QR sheet ─────────────────────────────────
-async function downloadQRSheet() {
+function downloadQRSheet() {
   if (!_attendees.length) {
     showToast("No attendees to generate QR codes for.", "info");
     return;
   }
-
-  const btn = document.getElementById("download-qr-btn");
-  setButtonLoading(btn, true);
-
-  // Build a printable HTML page in a new tab
-  const rows = _attendees.map(a => {
-    const name  = a.profiles?.name  ?? a.profiles?.email ?? "Attendee";
-    const email = a.profiles?.email ?? "";
-    const token = a.qr_token;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(token)}`;
-    return `
-      <div class="qr-print-item">
-        <img src="${qrUrl}" width="160" height="160" alt="QR for ${escHtml(name)}" loading="lazy" />
-        <div class="qr-print-name">${escHtml(name)}</div>
-        <div class="qr-print-email">${escHtml(email)}</div>
-      </div>`;
-  }).join("");
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8"/>
-  <title>QR Codes — ${escHtml(_event.name)}</title>
-  <style>
-    body { font-family: 'Helvetica Neue', sans-serif; margin: 0; padding: 1rem; }
-    h1 { font-size: 1.2rem; color: #0c2340; border-bottom: 2px solid #ae9142; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-    .sheet { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-    .qr-print-item { border: 1px solid #c1cddd; border-radius: 8px; padding: 1rem; text-align: center; break-inside: avoid; }
-    .qr-print-item img { margin: 0 auto 0.5rem; display: block; }
-    .qr-print-name { font-weight: 600; font-size: 0.8rem; color: #0c2340; }
-    .qr-print-email { font-size: 0.65rem; color: #888; margin-top: 2px; }
-    @media print { body { padding: 0; } }
-  </style>
-</head>
-<body>
-  <h1>QR Codes — ${escHtml(_event.name)}</h1>
-  <div class="sheet">${rows}</div>
-  <script>window.onload = () => window.print();<\/script>
-</body>
-</html>`;
-
-  const win = window.open("", "_blank");
-  win.document.write(html);
-  win.document.close();
-
-  setButtonLoading(btn, false);
+  window.open(`qr-sheet.html?event_id=${_eventId}`, "_blank");
 }
 
 // ── REPORT TAB ────────────────────────────────────────────────
@@ -685,7 +835,14 @@ function renderReport() {
      <span class="text-xs" style="color:var(--dark-sky-blue);font-weight:400">${formatDate(p.period_date)}</span></th>`
   ).join("");
 
-  const rows = Object.values(byAttendee).map(att => {
+  const allAttendees = Object.values(byAttendee);
+  const totalPages   = Math.ceil(allAttendees.length / REPORT_PAGE_SIZE);
+  if (_reportPage > totalPages) _reportPage = totalPages;
+
+  const start     = (_reportPage - 1) * REPORT_PAGE_SIZE;
+  const pageAtts  = allAttendees.slice(start, start + REPORT_PAGE_SIZE);
+
+  const rows = pageAtts.map(att => {
     const cells = _periods.map(p => {
       const rec = att.periods[p.id];
       if (!rec) {
@@ -737,6 +894,42 @@ function renderReport() {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+
+  renderReportPagination(_reportPage, totalPages);
+}
+
+function renderReportPagination(current, total) {
+  const el = document.getElementById("report-pagination");
+  if (!el) return;
+  if (total <= 1) { el.innerHTML = ""; return; }
+
+  const pages = [];
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (current > 3) pages.push("…");
+    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+  }
+
+  el.innerHTML = `
+    <button class="page-btn" onclick="setReportPage(${current - 1})" ${current === 1 ? "disabled" : ""} aria-label="Previous page">
+      <i class="ti ti-chevron-left"></i>
+    </button>
+    ${pages.map(p => p === "…"
+      ? `<span style="width:30px;text-align:center;font-size:0.78rem;color:var(--color-text-muted)">…</span>`
+      : `<button class="page-btn ${p === current ? "active" : ""}" onclick="setReportPage(${p})" aria-label="Page ${p}">${p}</button>`
+    ).join("")}
+    <button class="page-btn" onclick="setReportPage(${current + 1})" ${current === total ? "disabled" : ""} aria-label="Next page">
+      <i class="ti ti-chevron-right"></i>
+    </button>`;
+}
+
+function setReportPage(page) {
+  _reportPage = page;
+  renderReport();
 }
 
 async function toggleAttendanceOverride(logId, newPresent) {
@@ -838,6 +1031,71 @@ function initForms() {
       showToast(err.message ?? "Failed to invite taker.", "error");
     }
     setButtonLoading(btn, false);
+  });
+
+  // Attendee search
+  document.getElementById("attendees-search")?.addEventListener("input", (e) => {
+    _attendeesSearch = e.target.value.trim();
+    _attendeesPage   = 1;
+    renderAttendees();
+  });
+
+  // "No code" checkbox — disable code field when checked
+  document.getElementById("add-att-nocode")?.addEventListener("change", (e) => {
+    const codeInput = document.getElementById("add-att-code");
+    codeInput.disabled = e.target.checked;
+    if (e.target.checked) codeInput.value = "";
+  });
+
+  // Add attendee form
+  document.getElementById("add-attendee-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn    = document.getElementById("add-att-submit-btn");
+    const name   = document.getElementById("add-att-name").value.trim();
+    const email  = document.getElementById("add-att-email").value.trim().toLowerCase();
+    const noCode = document.getElementById("add-att-nocode").checked;
+    const code   = noCode
+      ? email
+      : (document.getElementById("add-att-code").value.trim().toLowerCase() || email);
+
+    if (!name)  { showToast("Name is required.", "error"); return; }
+    if (!email) { showToast("Email is required.", "error"); return; }
+
+    setButtonLoading(btn, true);
+    try {
+      await addSingleAttendee({ name, email, code });
+
+      const ul = document.getElementById("modal-added-ul");
+      const li = document.createElement("li");
+      li.className = "text-sm";
+      li.style.cssText = "display:flex;align-items:center;gap:6px";
+      li.innerHTML = `<i class="ti ti-circle-check" style="color:var(--color-success)"></i>
+        <span>${escHtml(name)}</span>
+        <span class="text-faint text-xs">${escHtml(email)}</span>`;
+      ul.appendChild(li);
+      document.getElementById("modal-added-list").style.display = "block";
+
+      e.target.reset();
+      document.getElementById("add-att-code").disabled = false;
+      document.getElementById("add-att-name").focus();
+      showToast(`${name} added.`, "success");
+    } catch (err) {
+      showToast(err.message ?? "Failed to add attendee.", "error");
+    }
+    setButtonLoading(btn, false);
+  });
+
+  // Close modals on backdrop click
+  document.getElementById("modal-add-attendee")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeAddAttendeeModal();
+  });
+  document.getElementById("modal-qr-position")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeQrPositionModal();
+  });
+
+  // Close modals on Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeAddAttendeeModal(); closeQrPositionModal(); }
   });
 
   // CSV file input

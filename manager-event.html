@@ -5,6 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Event — Event Manager</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .avery-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px 6px;
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--color-border-soft);
+      border-radius: 8px;
+    }
+    .avery-cell {
+      aspect-ratio: 2.625 / 1;
+      border: 1px solid #c1cddd;
+      border-radius: 3px;
+      cursor: pointer;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: #9aabbf;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+      user-select: none;
+    }
+    .avery-cell:hover { background: #fdf6e3; border-color: #ae9142; color: #ae9142; }
+    .avery-cell.selected { background: #ae9142; border-color: #9a7e38; color: #fff; }
+  </style>
 </head>
 <body>
 <div class="app-layout">
@@ -308,7 +336,7 @@
             </div>
 
             <!-- QR sheet card -->
-            <!--<div class="card">
+            <div class="card">
               <div class="card-header">
                 <i class="ti ti-qrcode"></i>
                 <span class="card-header-title">QR Code Sheet</span>
@@ -321,7 +349,7 @@
                   <i class="ti ti-printer"></i> Print QR Code Sheet
                 </button>
               </div>
-            </div>-->
+            </div>
 
           </div>
 
@@ -331,6 +359,17 @@
               <i class="ti ti-users"></i>
               <span class="card-header-title">Enrolled Attendees</span>
               <span class="badge badge-neutral" style="margin-left:var(--space-2)" id="attendees-count">0 attendees</span>
+              <div class="card-header-actions">
+                <div class="input-group" style="width:200px">
+                  <i class="ti ti-search input-icon"></i>
+                  <input type="search" id="attendees-search" class="form-control"
+                    placeholder="Search attendees…"
+                    style="height:32px;padding-top:0;padding-bottom:0;padding-left:2.4rem;font-size:0.8rem" />
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="openAddAttendeeModal()">
+                  <i class="ti ti-user-plus"></i> Add Attendee
+                </button>
+              </div>
             </div>
             <div class="table-wrap" style="border:none">
               <table aria-label="Attendees list">
@@ -347,6 +386,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="attendees-pagination" class="pagination" style="justify-content:center;padding:var(--space-3) var(--space-4)"></div>
           </div>
 
         </div>
@@ -371,6 +411,7 @@
               <p>Click the Report tab to load attendance data.</p>
             </div>
           </div>
+          <div id="report-pagination" class="pagination" style="justify-content:center;padding:var(--space-3) var(--space-4)"></div>
 
         </div>
 
@@ -383,6 +424,86 @@
 
 <!-- Toast container -->
 <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ── Add Attendee Modal ────────────────────────────────────── -->
+<div id="modal-add-attendee" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-add-attendee-title">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-add-attendee-title">
+        <i class="ti ti-user-plus"></i> Add Attendee
+      </span>
+      <button class="modal-close btn btn-ghost btn-icon" onclick="closeAddAttendeeModal()" aria-label="Close">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-bottom:var(--space-5)">
+        Fill in the fields and click <strong>Add</strong>. The modal stays open so you can add multiple attendees in a row.
+      </p>
+      <form id="add-attendee-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="add-att-name">Name <span class="required">*</span></label>
+          <input type="text" id="add-att-name" class="form-control" placeholder="Full name" maxlength="120" required autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-att-email">Email <span class="required">*</span></label>
+          <input type="email" id="add-att-email" class="form-control" placeholder="attendee@example.com" required autocomplete="off" />
+        </div>
+        <div class="form-group" id="add-att-code-group">
+          <label class="form-label" for="add-att-code">Student ID / Code</label>
+          <input type="text" id="add-att-code" class="form-control" placeholder="e.g. S00123" autocomplete="off" />
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-5)">
+          <input type="checkbox" id="add-att-nocode" style="width:16px;height:16px;cursor:pointer;accent-color:var(--nd-gold)" />
+          <label for="add-att-nocode" class="text-sm" style="cursor:pointer;margin-bottom:0">
+            No code — use email as QR token
+          </label>
+        </div>
+        <div style="display:flex;gap:var(--space-3)">
+          <button type="submit" id="add-att-submit-btn" class="btn btn-primary">
+            <i class="ti ti-user-plus"></i> Add Attendee
+          </button>
+          <button type="button" class="btn btn-ghost" onclick="closeAddAttendeeModal()">
+            Done
+          </button>
+        </div>
+      </form>
+
+      <div id="modal-added-list" style="display:none;margin-top:var(--space-5);border-top:1px solid var(--color-border-soft);padding-top:var(--space-4)">
+        <p class="text-xs text-muted" style="margin-bottom:var(--space-2)">Added this session:</p>
+        <ul id="modal-added-ul" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── QR Position Modal ──────────────────────────────────────── -->
+<div id="modal-qr-position" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-qr-pos-title">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-qr-pos-title">
+        <i class="ti ti-qrcode"></i> Print QR Label
+      </span>
+      <button class="modal-close btn btn-ghost btn-icon" onclick="closeQrPositionModal()" aria-label="Close">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm" style="margin-bottom:var(--space-4)">
+        Printing label for <strong id="qr-pos-attendee-name"></strong>.<br>
+        <span class="text-muted">Click the cell where the label should be placed on the Avery 5160 sheet.</span>
+      </p>
+      <div id="avery-grid" class="avery-preview-grid"></div>
+      <p class="text-xs text-muted" id="qr-pos-hint" style="margin-top:var(--space-3);text-align:center;min-height:1.2em"></p>
+      <div style="display:flex;justify-content:flex-end;gap:var(--space-3);margin-top:var(--space-5)">
+        <button class="btn btn-ghost" onclick="closeQrPositionModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-print-qr" disabled onclick="doPrintSingleQr()">
+          <i class="ti ti-printer"></i> Print
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Scripts -->
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
