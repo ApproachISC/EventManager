@@ -263,9 +263,15 @@ async function init() {
       .from("event_attendees")
       .select("qr_token, profiles(name, email)")
       .eq("event_id", eventId)
-      .order("name", { referencedTable: "profiles", ascending: true });
+      .order("assigned_at");
 
     if (attErr || !attendees?.length) { showError("No attendees found for this event."); return; }
+
+    attendees.sort((a, b) => {
+      const nameA = (a.profiles?.name ?? a.profiles?.email ?? "").toLowerCase();
+      const nameB = (b.profiles?.name ?? b.profiles?.email ?? "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
     document.getElementById("sheet-meta").textContent =
       `${attendees.length} attendee${attendees.length !== 1 ? "s" : ""} · Generated ${new Date().toLocaleDateString()}`;
