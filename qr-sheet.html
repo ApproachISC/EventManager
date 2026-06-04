@@ -263,7 +263,7 @@ async function init() {
       .from("event_attendees")
       .select("qr_token, profiles(name, email)")
       .eq("event_id", eventId)
-      .order("assigned_at");
+      .order("name", { referencedTable: "profiles", ascending: true });
 
     if (attErr || !attendees?.length) { showError("No attendees found for this event."); return; }
 
