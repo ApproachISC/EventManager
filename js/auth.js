@@ -203,6 +203,12 @@ async function signIn(email, password) {
   const profile = await getProfile(data.user.id);
   if (!profile) throw new Error("Profile not found. Please contact your administrator.");
 
+  if (!["taker", "manager"].includes(profile.role)) {
+    await _supabase.auth.signOut();
+    _currentUser = null;
+    throw new Error("Access denied. This portal is for staff only.");
+  }
+
   return { user: data.user, profile };
 }
 
