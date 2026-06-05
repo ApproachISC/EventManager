@@ -259,31 +259,65 @@ function generateTempPassword() {
 async function inviteUser(opts) {
   const tempPassword = generateTempPassword();
 
-  // 1. Insert invite row first — the DB trigger reads this row when the
-  //    auth user is created to build the profile and consume the invite.
-  const { data: invite, error: inviteErr } = await _supabase
+  // 1. Check if this email already exists in the invites table.
+  const { data: existing } = await _supabase
     .from("invites")
-    .insert({
-      email:         opts.email,
-      role:          opts.role,
-      temp_password: tempPassword,
-      event_id:      opts.eventId   ?? null,
-      period_id:     opts.periodId  ?? null,
-      invited_by:    _currentUser.id,
-    })
-    .select()
-    .single();
+    .select("id")
+    .eq("email", opts.email)
+    .maybeSingle();
 
-  if (inviteErr) throw inviteErr;
+  let invite;
 
-  // 2. Create auth user via Edge Function (uses service role key server-side).
-  //    The DB trigger handle_new_auth_user fires on insert and creates the profile.
-  const { data: userData, error: createErr } = await _supabase.functions.invoke("create-user", {
-    body: { email: opts.email, password: tempPassword, role: opts.role },
-  });
-  if (createErr) throw createErr;
+  if (existing) {
+    // Email found — just update role and temp password, skip user creation.
+    const { data: updated, error: updateErr } = await _supabase
+      .from("invites")
+      .update({
+        role:          opts.role,
+        temp_password: tempPassword,
+        event_id:      opts.eventId  ?? null,
+        period_id:     opts.periodId ?? null,
+        invited_by:    _currentUser.id,
+      })
+      .eq("id", existing.id)
+      .select()
+      .single();
 
-  // 3. Send invite email via Edge Function
+    if (updateErr) throw updateErr;
+    invite = updated;
+
+    // Update the auth user's password and profile role via Edge Function.
+    const { error: updateUserErr } = await _supabase.functions.invoke("create-user", {
+      body: { email: opts.email, password: tempPassword, role: opts.role, update: true },
+    });
+    if (updateUserErr) throw updateUserErr;
+  } else {
+    // New email — insert invite row first so the DB trigger can read it when
+    // the auth user is created to build the profile and consume the invite.
+    const { data: inserted, error: inviteErr } = await _supabase
+      .from("invites")
+      .insert({
+        email:         opts.email,
+        role:          opts.role,
+        temp_password: tempPassword,
+        event_id:      opts.eventId   ?? null,
+        period_id:     opts.periodId  ?? null,
+        invited_by:    _currentUser.id,
+      })
+      .select()
+      .single();
+
+    if (inviteErr) throw inviteErr;
+    invite = inserted;
+
+    // Create auth user via Edge Function (uses service role key server-side).
+    const { error: createErr } = await _supabase.functions.invoke("create-user", {
+      body: { email: opts.email, password: tempPassword, role: opts.role },
+    });
+    if (createErr) throw createErr;
+  }
+
+  // 2. Send invite email via Edge Function
   const emailType = opts.role === "manager"   ? "invite_manager"
                   : opts.role === "taker"     ? "invite_taker"
                   : "invite_attendee";

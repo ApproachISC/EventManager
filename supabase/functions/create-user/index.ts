@@ -61,7 +61,7 @@ serve(async (req) => {
 
     // ── 3. Parse and validate request body ─────────────────────
     const body = await req.json();
-    const { email, password, role, name } = body ?? {};
+    const { email, password, role, name, update: isUpdate } = body ?? {};
 
     if (!email || !password || !role) {
       return json({ error: "Missing required fields: email, password, role" }, 400);
@@ -79,7 +79,27 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // ── 5. Create the auth user ────────────────────────────────
+    // ── 5. Update existing user (re-invite flow) ───────────────
+    if (isUpdate) {
+      const { data: { users } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      const existingUser = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (!existingUser) {
+        return json({ error: "User not found" }, 404);
+      }
+
+      const { error: pwErr } = await adminClient.auth.admin.updateUserById(existingUser.id, { password });
+      if (pwErr) return json({ error: pwErr.message ?? "Failed to update password" }, 500);
+
+      const { error: profileErr } = await adminClient
+        .from("profiles")
+        .update({ role, setup_done: false })
+        .eq("id", existingUser.id);
+      if (profileErr) return json({ error: profileErr.message ?? "Failed to update profile" }, 500);
+
+      return json({ user_id: existingUser.id, updated: true });
+    }
+
+    // ── 6. Create the auth user ────────────────────────────────
     const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
       email,
       password,
