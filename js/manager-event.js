@@ -88,7 +88,8 @@ async function loadAttendees() {
 
 async function loadReport() {
   const { data, error } = await _supabase
-    .rpc("attendance_report", { p_event_id: _eventId });
+    .rpc("attendance_report", { p_event_id: _eventId })
+    .limit(100000);
   if (error) { console.error(error); return; }
   _report = data ?? [];
   renderReport();
