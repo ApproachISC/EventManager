@@ -471,6 +471,8 @@ function renderAttendees() {
     return;
   }
 
+  visible.sort((a, b) => (a.profiles?.name ?? "").localeCompare(b.profiles?.name ?? ""));
+
   const totalPages = Math.ceil(visible.length / ATTENDEES_PAGE_SIZE);
   if (_attendeesPage > totalPages) _attendeesPage = totalPages;
 
