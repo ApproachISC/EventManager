@@ -87,11 +87,20 @@ async function loadAttendees() {
 }
 
 async function loadReport() {
-  const { data, error } = await _supabase
-    .rpc("attendance_report", { p_event_id: _eventId })
-    .limit(100000);
-  if (error) { console.error(error); return; }
-  _report = data ?? [];
+  const PAGE = 1000;
+  let all  = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await _supabase
+      .rpc("attendance_report", { p_event_id: _eventId })
+      .range(from, from + PAGE - 1);
+    if (error) { console.error(error); return; }
+    if (!data?.length) break;
+    all  = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  _report = all;
   renderReport();
 }
 
