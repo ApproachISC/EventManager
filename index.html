@@ -22,6 +22,12 @@
     <!-- Body -->
     <div class="auth-card-body">
 
+      <!-- Shown after a successful password reset -->
+      <div id="reset-alert" class="alert alert-success mb-6" style="display:none" role="status">
+        <i class="ti ti-circle-check"></i>
+        <span>Your password has been updated. Sign in with your new password.</span>
+      </div>
+
       <!-- Error alert (hidden by default) -->
       <div id="error-alert" class="alert alert-danger mb-6" style="display:none" role="alert">
         <i class="ti ti-alert-circle"></i>
@@ -77,6 +83,9 @@
           <span class="form-error" id="pw-error" style="display:none">
             <i class="ti ti-alert-circle"></i> Please enter your password.
           </span>
+          <div class="text-sm mt-2" style="text-align:right">
+            <a href="forgot-password.html" id="forgot-link">Forgot your password?</a>
+          </div>
         </div>
 
         <button type="submit" id="submit-btn" class="btn btn-primary btn-xl w-full mt-2">
@@ -112,6 +121,21 @@
       const submitBtn = document.getElementById("submit-btn");
       const errAlert  = document.getElementById("error-alert");
       const errMsg    = document.getElementById("error-msg");
+
+      // Confirmation after returning from reset-password.html
+      if (getParam("reset") === "1") {
+        document.getElementById("reset-alert").style.display = "flex";
+        history.replaceState(null, "", window.location.pathname);
+      }
+
+      // Carry the typed email over to the forgot-password page
+      document.getElementById("forgot-link").addEventListener("click", (e) => {
+        const email = emailIn.value.trim();
+        if (email) {
+          e.preventDefault();
+          window.location.href = `forgot-password.html?email=${encodeURIComponent(email)}`;
+        }
+      });
 
       // Toggle password visibility
       document.getElementById("toggle-pw").addEventListener("click", () => {

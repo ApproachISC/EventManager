@@ -7,7 +7,12 @@ Sends transactional invite emails via Resend.
 ```bash
 supabase functions deploy send-email
 supabase functions deploy create-user
+supabase functions deploy recover-password
 ```
+
+`recover-password` is called from the logged-out "Forgot password?" page. It uses the
+same Brevo/`APP_URL` secrets plus `SUPABASE_SERVICE_ROLE_KEY`. The reset link points to
+`$APP_URL/reset-password.html`.
 
 ## Required secrets
 

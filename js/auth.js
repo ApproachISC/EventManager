@@ -28,12 +28,14 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 // ── Page identifiers ──────────────────────────────────────────
 const PAGES = {
-  login:        "index.html",
-  setup:        "setup.html",
-  manager:      "manager.html",
-  managerEvent: "manager-event.html",
-  taker:        "taker.html",
-  attendee:     "attendee.html",
+  login:          "index.html",
+  forgotPassword: "forgot-password.html",
+  resetPassword:  "reset-password.html",
+  setup:          "setup.html",
+  manager:        "manager.html",
+  managerEvent:   "manager-event.html",
+  taker:          "taker.html",
+  attendee:       "attendee.html",
 };
 
 // ── Cached session state ──────────────────────────────────────
@@ -210,6 +212,43 @@ async function signIn(email, password) {
   }
 
   return { user: data.user, profile };
+}
+
+/**
+ * Ask the server to email a password reset link.
+ * Resolves the same way whether or not the email exists.
+ */
+async function requestPasswordRecovery(email) {
+  const { error } = await _supabase.functions.invoke("recover-password", {
+    body: { email },
+  });
+  if (error) throw error;
+}
+
+/**
+ * Exchange the token from a reset link for a temporary session.
+ * Must be called before setNewPassword().
+ */
+async function verifyRecoveryToken(tokenHash) {
+  const { data, error } = await _supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type:       "recovery",
+  });
+  if (error) throw error;
+  _currentUser = data.user;
+  return data.user;
+}
+
+/**
+ * Set a new password for the user in the current recovery session,
+ * then sign out so they log in fresh with the new password.
+ */
+async function setNewPassword(newPassword) {
+  const { error } = await _supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+  await _supabase.auth.signOut();
+  _currentUser    = null;
+  _currentProfile = null;
 }
 
 /**
