@@ -882,4 +882,8 @@ create policy "attendance_logs: managers update"
 --   toggle_attendance(...)        → manager override
 --   generate_temp_password()      → 6-char alphanumeric
 --   attendance_report(event_id)   → pivot-ready report data
+--
+-- After this file, also run (fresh installs too):
+--   migrations/add_presence_logs.sql  → IN/OUT register
+--     (presence_logs table, record_presence(), presence_state())
 -- ============================================================

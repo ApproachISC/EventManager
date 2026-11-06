@@ -171,6 +171,10 @@
             onclick="onReportTabActivated()">
             <i class="ti ti-chart-bar"></i> Report
           </button>
+          <button class="tab-btn" data-tab="tab-presence" role="tab" aria-controls="tab-presence"
+            onclick="onPresenceTabActivated()">
+            <i class="ti ti-arrows-exchange"></i> IN/OUT Report
+          </button>
         </div>
 
         <!-- ══ PERIODS TAB ══════════════════════════════ -->
@@ -415,6 +419,59 @@
 
         </div>
 
+        <!-- ══ IN/OUT REPORT TAB ════════════════════════ -->
+        <div class="tab-panel" id="tab-presence" role="tabpanel">
+
+          <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:var(--space-3)">
+            <div>
+              <h3 style="margin-bottom:2px">IN/OUT Report</h3>
+              <p class="text-sm text-muted">Daily timeline of attendance scans and when each attendee left and returned to the room.</p>
+            </div>
+            <div style="display:flex;gap:var(--space-2);flex-wrap:wrap">
+              <button class="btn btn-ghost" id="presence-refresh-btn">
+                <i class="ti ti-refresh"></i> Refresh
+              </button>
+              <button class="btn btn-outline" id="presence-export-btn">
+                <i class="ti ti-table-export"></i> Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="presence-toolbar">
+            <div class="presence-toolbar-field">
+              <label class="form-label" for="presence-day" style="margin-bottom:0">Day</label>
+              <select id="presence-day" class="form-control" style="height:34px;padding-top:0;padding-bottom:0;min-width:200px"></select>
+            </div>
+            <div class="input-group" style="width:220px">
+              <i class="ti ti-search input-icon"></i>
+              <input type="search" id="presence-search" class="form-control"
+                placeholder="Search attendees…"
+                style="height:34px;padding-top:0;padding-bottom:0;padding-left:2.4rem;font-size:0.8rem" />
+            </div>
+            <label class="presence-toolbar-check">
+              <input type="checkbox" id="presence-only-left" />
+              Only attendees who left
+            </label>
+          </div>
+
+          <div class="presence-legend" aria-label="Legend">
+            <span><span class="tl-mark att" aria-hidden="true"></span> Attendance taken</span>
+            <span><span class="tl-mark in" aria-hidden="true"></span> IN</span>
+            <span><span class="tl-mark out" aria-hidden="true"></span> OUT</span>
+            <span><span class="tl-legend-swatch out" aria-hidden="true"></span> Out of the room</span>
+            <span><span class="tl-legend-swatch period" aria-hidden="true"></span> Period open</span>
+          </div>
+
+          <div id="presence-container">
+            <div class="table-empty">
+              <i class="ti ti-arrows-exchange"></i>
+              <p>Click the IN/OUT Report tab to load data.</p>
+            </div>
+          </div>
+          <div id="presence-pagination" class="pagination" style="justify-content:center;padding:var(--space-3) var(--space-4)"></div>
+
+        </div>
+
       </div>
       <!-- /data-tabs -->
 
@@ -510,6 +567,7 @@
 <script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/manager-event.js"></script>
+<script src="js/manager-presence.js"></script>
 
 <script>
   if (window.innerWidth <= 768) {

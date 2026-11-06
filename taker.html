@@ -78,6 +78,13 @@
     <!-- Page content -->
     <main class="page-content">
 
+      <!-- ── IN / OUT register (event-level, any time the event is active) ── -->
+      <div id="presence-bar" style="display:none">
+        <button type="button" class="btn btn-gold presence-open-btn" id="presence-open-btn">
+          <i class="ti ti-arrows-exchange"></i> IN / OUT REGISTER
+        </button>
+      </div>
+
       <!-- ── No session state ─────────────────────────── -->
       <div id="no-session-ui" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center">
         <div style="width:72px;height:72px;background:var(--medium-sky-blue);border-radius:var(--radius-xl);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--medium-blue);margin-bottom:var(--space-5)">
@@ -235,11 +242,101 @@
 <!-- Toast container -->
 <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+<!-- ── IN / OUT Register Modal ──────────────────────────────── -->
+<div id="modal-presence" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-presence-title">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-presence-title">
+        <i class="ti ti-arrows-exchange"></i> IN / OUT Register
+      </span>
+      <button type="button" class="modal-close btn btn-ghost btn-icon" id="presence-close-btn" aria-label="Close">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step 1: scan the attendee's QR code -->
+      <div id="presence-step-scan">
+        <div id="presence-feedback" class="alert" role="status" aria-live="polite" style="display:none"></div>
+
+        <div class="scanner-wrap presence-scanner">
+          <video class="scanner-video" id="presence-video" autoplay muted playsinline></video>
+          <div class="vf-corner vf-tl" aria-hidden="true"></div>
+          <div class="vf-corner vf-tr" aria-hidden="true"></div>
+          <div class="vf-corner vf-bl" aria-hidden="true"></div>
+          <div class="vf-corner vf-br" aria-hidden="true"></div>
+          <div class="scan-line" id="presence-scan-line" aria-hidden="true"></div>
+          <div class="scanner-overlay" id="presence-overlay">
+            <i class="ti ti-camera" aria-hidden="true"></i>
+            <span id="presence-overlay-msg">Starting camera…</span>
+          </div>
+        </div>
+
+        <form id="presence-manual-form" novalidate style="margin-top:var(--space-4)">
+          <div class="manual-input-wrap">
+            <input
+              type="text"
+              id="presence-manual-input"
+              class="form-control"
+              placeholder="Or enter the token code…"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="Attendee token code"
+              style="font-family:monospace;letter-spacing:0.05em"
+            />
+            <button type="submit" class="btn btn-primary" aria-label="Find attendee">
+              <i class="ti ti-search"></i> Find
+            </button>
+          </div>
+        </form>
+
+        <div id="presence-recent"></div>
+      </div>
+
+      <!-- Step 2: choose IN or OUT, then confirm -->
+      <div id="presence-step-choose" style="display:none">
+        <div class="presence-person">
+          <div class="avatar avatar-lg" id="presence-avatar" aria-hidden="true">?</div>
+          <div style="min-width:0">
+            <div class="presence-person-name" id="presence-name"></div>
+            <div class="presence-person-state" id="presence-state"></div>
+          </div>
+        </div>
+
+        <div class="presence-choices" role="group" aria-label="Select IN or OUT">
+          <button type="button" class="presence-choice in" data-direction="in" aria-pressed="false">
+            <i class="ti ti-login" aria-hidden="true"></i>
+            <span>IN</span>
+            <small class="presence-suggested">Suggested</small>
+          </button>
+          <button type="button" class="presence-choice out" data-direction="out" aria-pressed="false">
+            <i class="ti ti-logout" aria-hidden="true"></i>
+            <span>OUT</span>
+            <small class="presence-suggested">Suggested</small>
+          </button>
+        </div>
+
+        <div id="presence-warning" class="alert alert-warning" style="display:none;margin-top:var(--space-4)"></div>
+
+        <button type="button" class="btn w-full presence-confirm" id="presence-confirm-btn" style="display:none"></button>
+
+        <button type="button" class="btn btn-ghost w-full" id="presence-back-btn" style="margin-top:var(--space-2)">
+          <i class="ti ti-arrow-left"></i> Cancel — scan another
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/taker.js"></script>
+<script src="js/taker-presence.js"></script>
 
 <script>
   if (window.innerWidth <= 768) {

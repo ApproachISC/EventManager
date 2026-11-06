@@ -26,6 +26,7 @@ async function init() {
   _profile = session.profile;
 
   populateSidebarUser(_profile);
+  initPresence();
   await loadAssignment();
   initManualForm();
   initCameraControls();
@@ -35,26 +36,60 @@ async function init() {
 
 // ── Load taker's event assignment ─────────────────────────────
 async function loadAssignment() {
-  if (_profile.role === "manager") {
-    await loadAssignmentForManager();
+  const eventId = getParam("event_id");
+
+  if (_profile.role === "manager" && eventId) {
+    await loadAssignmentForManager(eventId);
     return;
   }
 
-  const { data, error } = await _supabase
+  // No event in the URL (or a taker): find the event this user is assigned to.
+  // Active assignments whose event is active win; otherwise fall back to any
+  // active assignment so we can explain why it isn't usable (draft / closed).
+  let query = _supabase
     .from("event_takers")
-    .select("id, is_active, events ( id, name, status )")
+    .select("id, is_active, events ( id, name, status, start_date )")
     .eq("user_id", _profile.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
+    .eq("is_active", true);
+  if (eventId) query = query.eq("event_id", eventId);
+
+  const { data: rows, error } = await query;
+  const assignments = (rows ?? []).filter(r => r.events);
+
+  let data =
+    assignments
+      .filter(r => r.events.status === "active")
+      .sort((a, b) => (b.events.start_date ?? "").localeCompare(a.events.start_date ?? ""))[0]
+    ?? assignments.find(r => r.events.status === "draft")
+    ?? assignments[0]
+    ?? null;
+
+  // Managers not assigned as takers: fall back to an active event they own
+  if (!data && !error && _profile.role === "manager") {
+    const { data: owned } = await _supabase
+      .from("events")
+      .select("id, name, status, start_date")
+      .eq("created_by", _profile.id)
+      .eq("status", "active")
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (owned) data = { id: null, is_active: true, events: owned };
+  }
 
   if (error || !data) {
-    showNoSession("You have no active session assignment.");
+    showNoSession(
+      _profile.role === "manager"
+        ? "No active event found. Open the taker page from an event."
+        : "You have no active session assignment."
+    );
     return;
   }
 
   _assignment = data;
   _event      = data.events;
+
+  if (_profile.role === "manager") injectManagerBackLink(_event.id);
 
   if (_event.status !== "active") {
     showNoSession(
@@ -76,7 +111,7 @@ async function loadAssignment() {
   _periods = periods ?? [];
 
   if (!_periods.length) {
-    showNoSession(`"${_event.name}" has no periods defined yet. Ask your manager to add periods.`);
+    showNoSession(`"${_event.name}" has no periods defined yet. Ask your manager to add periods.`, true);
     return;
   }
 
@@ -85,13 +120,7 @@ async function loadAssignment() {
 }
 
 // ── Manager taking attendance directly ────────────────────────
-async function loadAssignmentForManager() {
-  const eventId = getParam("event_id");
-  if (!eventId) {
-    showNoSession("No event specified.");
-    return;
-  }
-
+async function loadAssignmentForManager(eventId) {
   injectManagerBackLink(eventId);
 
   const { data, error } = await _supabase
@@ -126,7 +155,7 @@ async function loadAssignmentForManager() {
   _periods = periods ?? [];
 
   if (!_periods.length) {
-    showNoSession(`"${_event.name}" has no periods defined yet.`);
+    showNoSession(`"${_event.name}" has no periods defined yet.`, true);
     return;
   }
 
@@ -145,7 +174,9 @@ function injectManagerBackLink(eventId) {
 }
 
 // ── No active session state ───────────────────────────────────
-function showNoSession(message) {
+// allowPresence: true when the event is active (IN/OUT still works without periods)
+function showNoSession(message, allowPresence = false) {
+  showPresenceBar(allowPresence);
   document.getElementById("scanner-ui").style.display     = "none";
   document.getElementById("period-picker-ui").style.display = "none";
   const ns = document.getElementById("no-session-ui");
@@ -171,6 +202,7 @@ function showPeriodPicker() {
   document.getElementById("no-session-ui").style.display    = "none";
   document.getElementById("scanner-ui").style.display       = "none";
   document.getElementById("period-picker-ui").style.display = "block";
+  showPresenceBar(true);
 
   const openPeriods = _periods.filter(isOpenPeriod);
 

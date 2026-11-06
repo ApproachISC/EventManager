@@ -1798,6 +1798,303 @@ tbody td {
 
 
 /* ============================================================
+   taker.html — IN / OUT register
+   ============================================================ */
+
+#presence-bar {
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+
+.presence-open-btn {
+  width: 100%;
+  max-width: 480px;
+  padding: var(--space-3) var(--space-5);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  height: 55px;
+}
+
+#modal-presence .presence-scanner { aspect-ratio: 4/3; }
+
+.presence-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.presence-person-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--nd-blue);
+  overflow-wrap: anywhere;
+}
+
+.presence-person-state {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.presence-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.presence-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 140px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--dark-sky-blue);
+  background: var(--color-surface);
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.presence-choice i { font-size: 2.4rem; }
+.presence-choice:active { transform: scale(0.98); }
+
+.presence-choice.in  { color: var(--success-green); }
+.presence-choice.out { color: var(--accent-red); }
+.presence-choice.in:hover  { border-color: var(--success-green); }
+.presence-choice.out:hover { border-color: var(--accent-red); }
+
+.presence-choice.in.selected  { background: var(--success-green); border-color: var(--success-green); color: #fff; }
+.presence-choice.out.selected { background: var(--accent-red);    border-color: var(--accent-red);    color: #fff; }
+
+.presence-suggested {
+  display: none;
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--nd-gold);
+  color: var(--nd-blue);
+}
+
+.presence-choice.suggested .presence-suggested { display: block; }
+.presence-choice.suggested:not(.selected) { border-style: dashed; }
+
+.presence-confirm {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.presence-recent-title {
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-2);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.presence-recent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-soft);
+  font-size: 0.85rem;
+}
+
+.presence-recent-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ============================================================
+   manager-event.html — IN/OUT report timeline
+   ============================================================ */
+
+.presence-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-3);
+}
+
+.presence-toolbar-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.presence-toolbar-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.presence-toolbar-check input { width: 16px; height: 16px; accent-color: var(--nd-gold); cursor: pointer; }
+
+.presence-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-4);
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.presence-legend > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.presence-legend .tl-mark { position: static; transform: none; }
+
+.tl-legend-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.tl-legend-swatch.out    { background: rgba(171,16,11,0.16); border: 1px solid rgba(171,16,11,0.5); }
+.tl-legend-swatch.period { background: rgba(174,145,66,0.16); border: 1px solid rgba(174,145,66,0.4); }
+
+.tl {
+  min-width: 860px;
+  background: var(--color-surface);
+}
+
+.tl-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 64px 130px;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tl-row > div { padding: var(--space-2) var(--space-3); }
+.tl-row:not(.tl-head):hover { background: var(--light-sky-blue); }
+
+.tl-head {
+  background: var(--nd-blue);
+  color: var(--warm-white);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tl-name { min-width: 0; }
+.tl-num  { text-align: center; font-size: 0.82rem; }
+
+.tl-track {
+  position: relative;
+  height: 40px;
+  margin: 0 var(--space-3);
+  padding: 0 !important;
+}
+
+.tl-axis { height: 44px; }
+
+.tl-tick {
+  position: absolute;
+  bottom: 4px;
+  transform: translateX(-50%);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--dark-sky-blue);
+  white-space: nowrap;
+}
+
+.tl-period-label {
+  position: absolute;
+  top: 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--nd-gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-gridline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border-soft);
+}
+
+.tl-period {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(174,145,66,0.14);
+}
+
+.tl-out {
+  position: absolute;
+  top: 12px;
+  height: 16px;
+  background: rgba(171,16,11,0.16);
+  border: 1px solid rgba(171,16,11,0.5);
+  border-radius: 3px;
+}
+
+/* Open-ended: still out / didn't return */
+.tl-out.open {
+  border-right-style: dashed;
+  background: repeating-linear-gradient(45deg, rgba(171,16,11,0.16) 0 6px, rgba(171,16,11,0.08) 6px 12px);
+}
+
+.tl-mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  z-index: 1;
+}
+
+.tl-mark.att {
+  border-radius: 50%;
+  background: var(--medium-blue);
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.tl-mark.in {
+  background: var(--success-green);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  width: 14px;
+}
+
+.tl-mark.out {
+  background: var(--accent-red);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  width: 14px;
+}
+
+
+/* ============================================================
    manager-event.html — CSV import progress bar
    ============================================================ */
 
